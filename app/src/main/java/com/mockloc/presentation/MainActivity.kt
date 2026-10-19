@@ -2,10 +2,8 @@ package com.mockloc.presentation
 
 import android.content.Intent
 import android.os.Bundle
-import android.view.LayoutInflater
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.LinearLayout
@@ -19,6 +17,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import com.google.android.material.button.MaterialButton
 import com.google.android.material.button.MaterialButtonToggleGroup
 import com.google.android.material.chip.Chip
 import com.google.android.material.chip.ChipGroup
@@ -44,7 +43,6 @@ import com.mockloc.domain.model.Waypoint
 import com.mockloc.presentation.map.OsmMapController
 import com.mockloc.root.EnvironmentDetector
 import com.mockloc.root.RootProviderManager
-import com.mockloc.service.MockService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -86,7 +84,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etAltitude: TextInputEditText
 
     // 单点与巡航控制
-    private lateinit var btnToggleMock: Button
+    private lateinit var btnToggleMock: MaterialButton
     private lateinit var layoutCruiseParams: LinearLayout
     private lateinit var layoutCruiseActions: LinearLayout
     private lateinit var chipGroupSpeed: ChipGroup
@@ -94,13 +92,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var etCustomSpeed: TextInputEditText
     private lateinit var chipGroupLoopMode: ChipGroup
 
-    private lateinit var btnStartCruise: Button
-    private lateinit var btnPauseResumeCruise: Button
-    private lateinit var btnStopCruise: Button
+    private lateinit var btnStartCruise: MaterialButton
+    private lateinit var btnPauseResumeCruise: MaterialButton
+    private lateinit var btnStopCruise: MaterialButton
 
     // 引擎与状态
     private val cruiseEngine = CruiseEngine()
     private var cruiseJob: Job? = null
+    private var singlePointJob: Job? = null
     private val rootProviderManager: RootProviderManager by lazy { RootProviderManager(this) }
 
     private var isCruiseMode: Boolean = false
@@ -111,8 +110,10 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         // 确保从持久化存储恢复配置与白名单
-        MockPrefs.loadConfig(this)
-        whitelistRepository.loadSelectedPackages()
+        try {
+            MockPrefs.loadConfig(this)
+            whitelistRepository.loadSelectedPackages()
+        } catch (_: Throwable) {}
 
         initViews()
         setupMap()
@@ -133,6 +134,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        singlePointJob?.cancel()
+        singlePointJob = null
         stopCruiseSimulation()
     }
 
@@ -271,23 +274,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun refreshEnvironmentStatus() {
-        val status = EnvironmentDetector.checkEnvironment()
+        try {
+            val status = EnvironmentDetector.checkEnvironment()
 
-        if (status.isXposedActive) {
-            tvStatusXposed.text = getString(R.string.status_active)
-            tvStatusXposed.setTextColor(ContextCompat.getColor(this, R.color.status_active))
-        } else {
-            tvStatusXposed.text = getString(R.string.status_inactive)
-            tvStatusXposed.setTextColor(ContextCompat.getColor(this, R.color.status_inactive))
-        }
+            if (status.isXposedActive) {
+                tvStatusXposed.text = getString(R.string.status_active)
+                tvStatusXposed.setTextColor(ContextCompat.getColor(this, R.color.status_active))
+            } else {
+                tvStatusXposed.text = getString(R.string.status_inactive)
+                tvStatusXposed.setTextColor(ContextCompat.getColor(this, R.color.status_inactive))
+            }
 
-        if (status.isRootAvailable) {
-            tvStatusRoot.text = getString(R.string.status_available)
-            tvStatusRoot.setTextColor(ContextCompat.getColor(this, R.color.status_active))
-        } else {
-            tvStatusRoot.text = getString(R.string.status_unavailable)
-            tvStatusRoot.setTextColor(ContextCompat.getColor(this, R.color.status_inactive))
-        }
+            if (status.isRootAvailable) {
+                tvStatusRoot.text = getString(R.string.status_available)
+                tvStatusRoot.setTextColor(ContextCompat.getColor(this, R.color.status_active))
+            } else {
+                tvStatusRoot.text = getString(R.string.status_unavailable)
+                tvStatusRoot.setTextColor(ContextCompat.getColor(this, R.color.status_inactive))
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun syncStateWithConfig() {
@@ -299,13 +304,15 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun updateMockButtonState(isEnabled: Boolean) {
-        if (isEnabled) {
-            btnToggleMock.text = "⏹️ " + getString(R.string.btn_stop_mock)
-            btnToggleMock.setBackgroundColor(ContextCompat.getColor(this, R.color.status_inactive))
-        } else {
-            btnToggleMock.text = "🚀 " + getString(R.string.btn_start_mock)
-            btnToggleMock.setBackgroundColor(ContextCompat.getColor(this, R.color.primary))
-        }
+        try {
+            if (isEnabled) {
+                btnToggleMock.text = "⏹️ " + getString(R.string.btn_stop_mock)
+                btnToggleMock.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_inactive)
+            } else {
+                btnToggleMock.text = "🚀 " + getString(R.string.btn_start_mock)
+                btnToggleMock.backgroundTintList = ContextCompat.getColorStateList(this, R.color.primary)
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun performSearch() {
@@ -376,33 +383,38 @@ class MainActivity : AppCompatActivity() {
      * 发送跨进程广播，通知已注入的目标应用进程实时更新模拟定位配置与最新坐标
      */
     private fun broadcastConfigChange() {
-        val bundle = MockConfigManager.toBundle()
-        // 1. 发送全局广播
-        val globalIntent = Intent(MockConfigManager.ACTION_CONFIG_CHANGED).apply {
-            putExtras(bundle)
-        }
-        sendBroadcast(globalIntent)
+        try {
+            val bundle = MockConfigManager.toBundle()
+            // 1. 发送全局广播
+            val globalIntent = Intent(MockConfigManager.ACTION_CONFIG_CHANGED).apply {
+                putExtras(bundle)
+            }
+            sendBroadcast(globalIntent)
 
-        // 2. 针对白名单中勾选的目标应用逐个发送显式广播
-        val targets = MockConfigManager.getTargetPackages()
-        for (pkg in targets) {
-            try {
-                val explicitIntent = Intent(MockConfigManager.ACTION_CONFIG_CHANGED).apply {
-                    setPackage(pkg)
-                    putExtras(bundle)
-                }
-                sendBroadcast(explicitIntent)
-            } catch (_: Throwable) {}
-        }
+            // 2. 针对白名单中勾选的目标应用逐个发送显式广播
+            val targets = MockConfigManager.getTargetPackages()
+            for (pkg in targets) {
+                try {
+                    val explicitIntent = Intent(MockConfigManager.ACTION_CONFIG_CHANGED).apply {
+                        setPackage(pkg)
+                        putExtras(bundle)
+                    }
+                    sendBroadcast(explicitIntent)
+                } catch (_: Throwable) {}
+            }
+        } catch (_: Throwable) {}
     }
 
     private fun toggleSinglePointMock() {
         if (MockConfigManager.isMockEnabled) {
             // 停止模拟
             MockConfigManager.isMockEnabled = false
-            MockPrefs.saveConfig(this)
+            try {
+                MockPrefs.saveConfig(this)
+            } catch (_: Throwable) {}
 
-            MockService.stop(this)
+            singlePointJob?.cancel()
+            singlePointJob = null
 
             try {
                 if (rootProviderManager.isRunning) {
@@ -448,13 +460,44 @@ class MainActivity : AppCompatActivity() {
         MockConfigManager.isMockEnabled = true
 
         // 立即持久化配置
-        MockPrefs.saveConfig(this)
+        try {
+            MockPrefs.saveConfig(this)
+        } catch (_: Throwable) {}
 
         // 1. 触发跨进程广播同步
         broadcastConfigChange()
 
-        // 2. 启动前台服务，执行后台 1Hz 脉冲心跳保活与拟真微漂移
-        MockService.start(this)
+        // 2. 启动协程脉冲心跳（与轨迹巡航机制一致，安全无崩溃）
+        singlePointJob?.cancel()
+        singlePointJob = lifecycleScope.launch(Dispatchers.Default) {
+            var tick = 0
+            while (isActive && MockConfigManager.isMockEnabled && !isCruiseMode) {
+                tick++
+                val jitterLat = Math.sin(tick.toDouble()) * 0.000001
+                val jitterLng = Math.cos(tick.toDouble()) * 0.000001
+                val curLat = MockConfigManager.latitude + jitterLat
+                val curLng = MockConfigManager.longitude + jitterLng
+
+                if (EnvironmentDetector.isRootAvailable() && rootProviderManager.isRunning) {
+                    try {
+                        rootProviderManager.updateLocation(
+                            lat = curLat,
+                            lng = curLng,
+                            alt = MockConfigManager.altitude,
+                            speed = 0.0f,
+                            bearing = 0.0f,
+                            accuracy = 3.0f
+                        )
+                    } catch (_: Throwable) {}
+                }
+
+                if (tick % 2 == 0) {
+                    broadcastConfigChange()
+                }
+
+                delay(1000)
+            }
+        }
 
         // 3. 如果具备 Root 权限，同步向系统 TestProvider 注册并投递坐标
         try {
@@ -485,52 +528,56 @@ class MainActivity : AppCompatActivity() {
     // ==========================================
 
     private fun showFavoritesBottomSheet() {
-        val bottomSheetDialog = BottomSheetDialog(this)
-        val sheetView = layoutInflater.inflate(R.layout.dialog_favorites_bottom_sheet, null)
-        bottomSheetDialog.setContentView(sheetView)
+        try {
+            val bottomSheetDialog = BottomSheetDialog(this)
+            val sheetView = layoutInflater.inflate(R.layout.dialog_favorites_bottom_sheet, null)
+            bottomSheetDialog.setContentView(sheetView)
 
-        val rvFavorites = sheetView.findViewById<RecyclerView>(R.id.rvFavorites)
-        val layoutEmpty = sheetView.findViewById<View>(R.id.layoutEmptyFav)
-        val tvFavCount = sheetView.findViewById<TextView>(R.id.tvFavCount)
+            val rvFavorites = sheetView.findViewById<RecyclerView>(R.id.rvFavorites)
+            val layoutEmpty = sheetView.findViewById<View>(R.id.layoutEmptyFav)
+            val tvFavCount = sheetView.findViewById<TextView>(R.id.tvFavCount)
 
-        rvFavorites.layoutManager = LinearLayoutManager(this)
+            rvFavorites.layoutManager = LinearLayoutManager(this)
 
-        var list = favoriteRepository.getAll()
-        tvFavCount.text = "共 ${list.size} 个地点"
-        layoutEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
-        rvFavorites.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+            var list = favoriteRepository.getAll()
+            tvFavCount.text = "共 ${list.size} 个地点"
+            layoutEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+            rvFavorites.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
 
-        lateinit var adapter: FavoriteAdapter
-        adapter = FavoriteAdapter(
-            items = list,
-            onApplyClick = { fav ->
-                lastSelectedPoiName = fav.name
-                val point = GeoPoint(fav.latitude, fav.longitude, fav.altitude)
-                etLatitude.setText(String.format("%.6f", fav.latitude))
-                etLongitude.setText(String.format("%.6f", fav.longitude))
-                etAltitude.setText(String.format("%.1f", fav.altitude))
+            lateinit var adapter: FavoriteAdapter
+            adapter = FavoriteAdapter(
+                items = list,
+                onApplyClick = { fav ->
+                    lastSelectedPoiName = fav.name
+                    val point = GeoPoint(fav.latitude, fav.longitude, fav.altitude)
+                    etLatitude.setText(String.format("%.6f", fav.latitude))
+                    etLongitude.setText(String.format("%.6f", fav.longitude))
+                    etAltitude.setText(String.format("%.1f", fav.altitude))
 
-                mapController.setMockPin(point, fav.name, animate = true)
-                Toast.makeText(this, "已载入收藏: ${fav.name}", Toast.LENGTH_SHORT).show()
+                    mapController.setMockPin(point, fav.name, animate = true)
+                    Toast.makeText(this, "已载入收藏: ${fav.name}", Toast.LENGTH_SHORT).show()
 
-                if (MockConfigManager.isMockEnabled && !isCruiseMode) {
-                    applySinglePointMock(point)
+                    if (MockConfigManager.isMockEnabled && !isCruiseMode) {
+                        applySinglePointMock(point)
+                    }
+                    bottomSheetDialog.dismiss()
+                },
+                onDeleteClick = { fav ->
+                    favoriteRepository.delete(fav.id)
+                    list = favoriteRepository.getAll()
+                    adapter.updateData(list)
+                    tvFavCount.text = "共 ${list.size} 个地点"
+                    layoutEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+                    rvFavorites.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+                    Toast.makeText(this, R.string.fav_deleted, Toast.LENGTH_SHORT).show()
                 }
-                bottomSheetDialog.dismiss()
-            },
-            onDeleteClick = { fav ->
-                favoriteRepository.delete(fav.id)
-                list = favoriteRepository.getAll()
-                adapter.updateData(list)
-                tvFavCount.text = "共 ${list.size} 个地点"
-                layoutEmpty.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
-                rvFavorites.visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
-                Toast.makeText(this, R.string.fav_deleted, Toast.LENGTH_SHORT).show()
-            }
-        )
+            )
 
-        rvFavorites.adapter = adapter
-        bottomSheetDialog.show()
+            rvFavorites.adapter = adapter
+            bottomSheetDialog.show()
+        } catch (t: Throwable) {
+            Toast.makeText(this, "打开收藏夹失败: ${t.message}", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun showAddFavoriteDialog() {
@@ -588,6 +635,10 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // 停止单点心跳
+        singlePointJob?.cancel()
+        singlePointJob = null
+
         val speedMps: Float = when (chipGroupSpeed.checkedChipId) {
             R.id.chipSpeedWalk -> SpeedPreset.WALK.speedMps
             R.id.chipSpeedBike -> SpeedPreset.BIKE.speedMps
@@ -628,8 +679,9 @@ class MainActivity : AppCompatActivity() {
         cruiseEngine.start()
 
         MockConfigManager.isMockEnabled = true
-        MockPrefs.saveConfig(this)
-        MockService.start(this)
+        try {
+            MockPrefs.saveConfig(this)
+        } catch (_: Throwable) {}
 
         btnStartCruise.isEnabled = false
         btnPauseResumeCruise.isEnabled = true
@@ -689,8 +741,6 @@ class MainActivity : AppCompatActivity() {
         cruiseJob?.cancel()
         cruiseJob = null
         cruiseEngine.stop()
-
-        MockService.stop(this)
 
         if (EnvironmentDetector.isRootAvailable() && rootProviderManager.isRunning) {
             try {
