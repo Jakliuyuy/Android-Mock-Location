@@ -331,6 +331,30 @@ class MainActivity : AppCompatActivity() {
         return GeoPoint(latitude = lat, longitude = lng, altitude = alt)
     }
 
+    /**
+     * 发送跨进程广播，通知已注入的目标应用进程实时更新模拟定位配置与最新坐标
+     */
+    private fun broadcastConfigChange() {
+        val bundle = MockConfigManager.toBundle()
+        // 1. 发送全局广播
+        val globalIntent = Intent(MockConfigManager.ACTION_CONFIG_CHANGED).apply {
+            putExtras(bundle)
+        }
+        sendBroadcast(globalIntent)
+
+        // 2. 针对白名单中勾选的目标应用逐个发送显式广播（保障在 Android 14/15/16 等新系统后台中顺利交付）
+        val targets = MockConfigManager.getTargetPackages()
+        for (pkg in targets) {
+            try {
+                val explicitIntent = Intent(MockConfigManager.ACTION_CONFIG_CHANGED).apply {
+                    setPackage(pkg)
+                    putExtras(bundle)
+                }
+                sendBroadcast(explicitIntent)
+            } catch (_: Throwable) {}
+        }
+    }
+
     private fun toggleSinglePointMock() {
         if (MockConfigManager.isMockEnabled) {
             // 停止模拟
@@ -341,19 +365,38 @@ class MainActivity : AppCompatActivity() {
                 }
             } catch (_: Throwable) {}
 
+            broadcastConfigChange()
             updateMockButtonState(false)
             Toast.makeText(this, R.string.mock_stopped, Toast.LENGTH_SHORT).show()
         } else {
-            // 开启模拟
-            val point = parseInputCoordinates()
-            if (point == null) {
-                Toast.makeText(this, R.string.invalid_coordinates, Toast.LENGTH_SHORT).show()
+            // 开启模拟前检查目标白名单
+            val targets = MockConfigManager.getTargetPackages()
+            if (targets.isEmpty()) {
+                AlertDialog.Builder(this)
+                    .setTitle("提示：未添加目标应用")
+                    .setMessage("当前白名单为空！本应用采用严格的应用级隔离机制，仅对勾选的目标 App 生效。\n\n请点击【白名单分流管理】勾选需要模拟定位的应用（如高德地图、微信等），然后再开启模拟。")
+                    .setPositiveButton("前往勾选") { _, _ ->
+                        startActivity(Intent(this, WhitelistActivity::class.java))
+                    }
+                    .setNegativeButton("仍要开启") { _, _ ->
+                        proceedStartMock()
+                    }
+                    .show()
                 return
             }
-            applySinglePointMock(point)
-            updateMockButtonState(true)
-            Toast.makeText(this, R.string.mock_started, Toast.LENGTH_SHORT).show()
+            proceedStartMock()
         }
+    }
+
+    private fun proceedStartMock() {
+        val point = parseInputCoordinates()
+        if (point == null) {
+            Toast.makeText(this, R.string.invalid_coordinates, Toast.LENGTH_SHORT).show()
+            return
+        }
+        applySinglePointMock(point)
+        updateMockButtonState(true)
+        Toast.makeText(this, R.string.mock_started, Toast.LENGTH_SHORT).show()
     }
 
     private fun applySinglePointMock(point: GeoPoint) {
@@ -362,9 +405,17 @@ class MainActivity : AppCompatActivity() {
         MockConfigManager.altitude = point.altitude
         MockConfigManager.isMockEnabled = true
 
+        // 触发跨进程广播同步
+        broadcastConfigChange()
+
         // 如果具备 Root 权限，同步调用 RootProviderManager
         try {
             if (EnvironmentDetector.isRootAvailable()) {
+                // 尝试通过 su 赋予当前 App 模拟位置权限 (针对 Android 14/15/16)
+                try {
+                    rootProviderManager.grantMockPermissionWithSu(packageName)
+                } catch (_: Throwable) {}
+
                 if (!rootProviderManager.isRunning) {
                     rootProviderManager.startMock(
                         lat = point.latitude,
@@ -379,6 +430,8 @@ class MainActivity : AppCompatActivity() {
                     )
                 }
             }
+        } catch (sec: SecurityException) {
+            Toast.makeText(this, "Root TestProvider 启动受限，请在系统【开发者选项】中设置本应用为【模拟位置信息应用】", Toast.LENGTH_LONG).show()
         } catch (_: Throwable) {}
     }
 
@@ -456,6 +509,22 @@ class MainActivity : AppCompatActivity() {
                     MockConfigManager.speed = output.speedMps
                     MockConfigManager.bearing = output.bearingDeg
 
+                    // 广播同步至目标 Hook 进程
+                    broadcastConfigChange()
+
+                    // 同步更新 Root TestProvider 坐标
+                    if (EnvironmentDetector.isRootAvailable() && rootProviderManager.isRunning) {
+                        try {
+                            rootProviderManager.updateLocation(
+                                lat = output.point.latitude,
+                                lng = output.point.longitude,
+                                alt = output.altitude,
+                                speed = output.speedMps,
+                                bearing = output.bearingDeg
+                            )
+                        } catch (_: Throwable) {}
+                    }
+
                     withContext(Dispatchers.Main) {
                         mapController.updateCruiseMarker(output.point, output.bearingDeg, follow = false)
                     }
@@ -489,6 +558,13 @@ class MainActivity : AppCompatActivity() {
         cruiseJob?.cancel()
         cruiseJob = null
         cruiseEngine.stop()
+
+        if (EnvironmentDetector.isRootAvailable() && rootProviderManager.isRunning) {
+            try {
+                rootProviderManager.stopMock()
+            } catch (_: Throwable) {}
+        }
+        broadcastConfigChange()
 
         btnStartCruise.isEnabled = true
         btnPauseResumeCruise.isEnabled = false

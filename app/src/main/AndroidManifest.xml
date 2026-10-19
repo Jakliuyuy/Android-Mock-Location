@@ -9,6 +9,7 @@
     <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" />
 
     <queries>
         <intent>
@@ -22,6 +23,7 @@
         android:label="MockLocation"
         android:roundIcon="@android:drawable/ic_menu_mylocation"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MockLoc">
 
         <meta-data

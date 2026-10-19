@@ -38,6 +38,34 @@ class NominatimGeocodingService(
             return@withContext emptyList()
         }
 
+        // 1. 优先检测是否直接输入或粘贴了经纬度数值 (如: "39.9087, 116.3975" 或 "39.9087 116.3975")
+        val coordRegex = Regex("""^([+-]?\d+(?:\.\d+)?)[,\s，]+([+-]?\d+(?:\.\d+)?)$""")
+        val match = coordRegex.find(trimmed)
+        if (match != null) {
+            val v1 = match.groupValues[1].toDoubleOrNull()
+            val v2 = match.groupValues[2].toDoubleOrNull()
+            if (v1 != null && v2 != null) {
+                // 判断第一位是纬度还是经度
+                val (lat, lng) = if (v1 in -90.0..90.0 && v2 in -180.0..180.0) {
+                    Pair(v1, v2)
+                } else if (v2 in -90.0..90.0 && v1 in -180.0..180.0) {
+                    Pair(v2, v1)
+                } else {
+                    Pair(null, null)
+                }
+                if (lat != null && lng != null) {
+                    return@withContext listOf(
+                        GeocodingResult(
+                            name = "直接坐标: ${String.format("%.6f", lat)}, ${String.format("%.6f", lng)}",
+                            displayName = "纬度: $lat, 经度: $lng",
+                            point = GeoPoint(lat, lng),
+                            type = "coordinate"
+                        )
+                    )
+                }
+            }
+        }
+
         val effectiveLimit = if (limit <= 0) 10 else limit
 
         try {

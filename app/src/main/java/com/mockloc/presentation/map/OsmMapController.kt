@@ -7,6 +7,8 @@ import com.mockloc.domain.model.GeoPoint as DomainGeoPoint
 import org.osmdroid.config.Configuration
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.util.GeoPoint as OsmGeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
@@ -33,10 +35,36 @@ class OsmMapController(
     }
 
     private fun initMapDefaults() {
-        // 配置 OSMDroid 全局离线缓存与 User-Agent
-        Configuration.getInstance().userAgentValue = "MockLocApp/1.0"
+        // 配置 OSMDroid 全局离线缓存与合规 User-Agent
+        Configuration.getInstance().userAgentValue = context.packageName
 
-        mapView.setTileSource(TileSourceFactory.MAPNIK)
+        // 默认选用国内高速直连的高德矢量图源，规避 OSM 官方海外源在大致区域加载白屏或超时问题
+        try {
+            val aMapTileSource = object : XYTileSource(
+                "AutoNavi-Vector",
+                1,
+                19,
+                256,
+                ".png",
+                arrayOf(
+                    "https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&",
+                    "https://webrd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&",
+                    "https://webrd03.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&",
+                    "https://webrd04.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=8&"
+                )
+            ) {
+                override fun getTileURLString(pMapTileIndex: Long): String {
+                    return (baseUrl
+                            + "x=" + MapTileIndex.getX(pMapTileIndex)
+                            + "&y=" + MapTileIndex.getY(pMapTileIndex)
+                            + "&z=" + MapTileIndex.getZoom(pMapTileIndex))
+                }
+            }
+            mapView.setTileSource(aMapTileSource)
+        } catch (_: Throwable) {
+            mapView.setTileSource(TileSourceFactory.MAPNIK)
+        }
+
         mapView.setMultiTouchControls(true)
         mapView.controller.setZoom(16.0)
 
