@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- LSPosed 官方推荐作用域列表 (xposedscope) -->
+    <string-array name="xposed_scope">
+        <item>com.autonavi.minimap</item>
+        <item>com.baidu.BaiduMap</item>
+        <item>com.tencent.map</item>
+        <item>com.tencent.mm</item>
+        <item>com.alibaba.android.rimet</item>
+        <item>com.tencent.wework</item>
+        <item>com.ss.android.lark</item>
+        <item>com.sankuai.meituan</item>
+        <item>com.dianping.v1</item>
+    </string-array>
+</resources>
