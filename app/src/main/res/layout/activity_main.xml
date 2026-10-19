@@ -7,138 +7,52 @@
     android:layout_height="match_parent"
     android:background="@color/background">
 
-    <!-- 顶部主工具栏与状态信息 -->
-    <com.google.android.material.appbar.AppBarLayout
-        android:id="@+id/appBarLayout"
+    <!-- 全屏底层沉浸式地图 -->
+    <org.osmdroid.views.MapView
+        android:id="@+id/mapView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- 顶部悬浮控制区域 (搜索栏 + 状态徽章) -->
+    <LinearLayout
+        android:id="@+id/layoutTopOverlay"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:theme="@style/ThemeOverlay.MaterialComponents.Dark.ActionBar">
+        android:orientation="vertical"
+        android:paddingHorizontal="14dp"
+        android:paddingTop="16dp"
+        android:clipToPadding="false">
 
-        <com.google.android.material.appbar.MaterialToolbar
-            android:id="@+id/toolbar"
-            android:layout_width="match_parent"
-            android:layout_height="?attr/actionBarSize"
-            android:background="@color/primary"
-            app:title="@string/title_control_center"
-            app:titleTextColor="@color/text_on_primary" />
-
-        <!-- 运行环境与授权状态指示栏 -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/cardEnvironmentStatus"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_margin="8dp"
-            app:cardCornerRadius="8dp"
-            app:cardElevation="2dp"
-            app:strokeColor="@color/divider"
-            app:strokeWidth="1dp">
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:padding="10dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/status_xposed"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvStatusXposed"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4dp"
-                        android:text="@string/status_inactive"
-                        android:textStyle="bold"
-                        android:textColor="@color/status_inactive"
-                        android:textSize="12sp" />
-
-                    <View
-                        android:layout_width="1dp"
-                        android:layout_height="12dp"
-                        android:layout_marginHorizontal="10dp"
-                        android:background="@color/divider" />
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/status_root"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <TextView
-                        android:id="@+id/tvStatusRoot"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="4dp"
-                        android:text="@string/status_unavailable"
-                        android:textStyle="bold"
-                        android:textColor="@color/status_inactive"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <TextView
-                    android:id="@+id/tvStatusRecommended"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:text="推荐模式: 正在检测..."
-                    android:textColor="@color/primary"
-                    android:textSize="12sp" />
-            </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
-
-    </com.google.android.material.appbar.AppBarLayout>
-
-    <!-- 地图与浮层容器 -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        app:layout_behavior="@string/appbar_scrolling_view_behavior">
-
-        <!-- OSMDroid MapView 地图 -->
-        <org.osmdroid.views.MapView
-            android:id="@+id/mapView"
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintBottom_toTopOf="@+id/bottomControlCard"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
-
-        <!-- 浮在地图上方的地点搜索输入框 -->
+        <!-- 现代化悬浮搜索卡片 -->
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardSearch"
-            android:layout_width="0dp"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_margin="12dp"
             app:cardCornerRadius="24dp"
             app:cardElevation="6dp"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            app:strokeColor="#E2E8F0"
+            app:strokeWidth="1dp"
+            app:cardBackgroundColor="@color/surface">
 
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="48dp"
+                android:layout_height="50dp"
                 android:orientation="horizontal"
                 android:gravity="center_vertical"
-                android:paddingHorizontal="12dp">
+                android:paddingHorizontal="14dp">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:src="@android:drawable/ic_menu_search"
+                    app:tint="@color/text_hint" />
 
                 <EditText
                     android:id="@+id/etSearchQuery"
                     android:layout_width="0dp"
                     android:layout_height="match_parent"
                     android:layout_weight="1"
+                    android:layout_marginStart="8dp"
                     android:background="@null"
                     android:hint="@string/search_hint"
                     android:imeOptions="actionSearch"
@@ -150,9 +64,9 @@
 
                 <ProgressBar
                     android:id="@+id/pbSearch"
-                    android:layout_width="24dp"
-                    android:layout_height="24dp"
-                    android:layout_marginEnd="8dp"
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:layout_marginEnd="6dp"
                     android:visibility="gone" />
 
                 <ImageButton
@@ -163,301 +77,435 @@
                     android:contentDescription="@string/search_action"
                     android:src="@android:drawable/ic_menu_search"
                     app:tint="@color/primary" />
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="20dp"
+                    android:layout_marginHorizontal="6dp"
+                    android:background="@color/divider" />
+
+                <!-- 收藏夹入口按钮 -->
+                <ImageButton
+                    android:id="@+id/btnOpenFavorites"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/btn_favorites"
+                    android:src="@android:drawable/btn_star_big_on"
+                    app:tint="#F59E0B" />
+
+                <!-- 目标应用白名单入口按钮 -->
+                <ImageButton
+                    android:id="@+id/btnOpenWhitelist"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:layout_marginStart="2dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/btn_open_whitelist"
+                    android:src="@android:drawable/ic_menu_manage"
+                    app:tint="@color/primary" />
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 
-        <!-- 底部控制面板卡片 -->
-        <com.google.android.material.card.MaterialCardView
-            android:id="@+id/bottomControlCard"
-            android:layout_width="0dp"
+        <!-- 悬浮状态指示胶囊栏 -->
+        <LinearLayout
+            android:id="@+id/cardEnvironmentStatus"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            app:cardElevation="10dp"
-            app:cardCornerRadius="16dp"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent">
+            android:layout_gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal"
+            android:background="@drawable/bg_bottom_sheet_rounded"
+            android:backgroundTint="#F1F5F9"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="5dp"
+            android:gravity="center_vertical"
+            android:elevation="3dp">
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="LSPosed: "
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvStatusXposed"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/status_active"
+                android:textStyle="bold"
+                android:textColor="@color/status_active"
+                android:textSize="11sp" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="10dp"
+                android:layout_marginHorizontal="8dp"
+                android:background="#CBD5E1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Root: "
+                android:textColor="@color/text_secondary"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/tvStatusRoot"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/status_available"
+                android:textStyle="bold"
+                android:textColor="@color/status_active"
+                android:textSize="11sp" />
+
+            <!-- 隐藏的旧视图占位以保持代码完全兼容 -->
+            <TextView
+                android:id="@+id/tvStatusRecommended"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 悬浮快捷工具按钮 (右侧悬浮打点收藏与居中) -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="160dp"
+        android:orientation="vertical">
+
+        <!-- 收藏当前选定位置按钮 -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabAddFavorite"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:contentDescription="@string/btn_add_favorite"
+            android:src="@android:drawable/btn_star_big_on"
+            app:backgroundTint="@color/surface"
+            app:tint="#F59E0B"
+            app:elevation="4dp"
+            app:fabSize="mini" />
+
+        <!-- 快速复位地图至当前模拟位置 -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/fabLocateCurrent"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:contentDescription="定位到目标点"
+            android:src="@android:drawable/ic_menu_mylocation"
+            app:backgroundTint="@color/surface"
+            app:tint="@color/primary"
+            app:elevation="4dp"
+            app:fabSize="mini" />
+    </LinearLayout>
+
+    <!-- 底部现代化控制面板卡片 -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/bottomControlCard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:layout_marginHorizontal="12dp"
+        android:layout_marginBottom="12dp"
+        app:cardElevation="10dp"
+        app:cardCornerRadius="24dp"
+        app:strokeColor="#E2E8F0"
+        app:strokeWidth="1dp"
+        app:cardBackgroundColor="@color/surface">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingVertical="14dp">
+
+            <!-- 模式切换：单点模拟 vs 轨迹巡航 (Segmented Control) -->
+            <com.google.android.material.button.MaterialButtonToggleGroup
+                android:id="@+id/toggleModeGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                app:singleSelection="true"
+                app:selectionRequired="true">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnModeSingle"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_weight="1"
+                    android:text="📍 单点定位"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    app:cornerRadius="12dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnModeCruise"
+                    style="?attr/materialButtonOutlinedStyle"
+                    android:layout_width="0dp"
+                    android:layout_height="42dp"
+                    android:layout_weight="1"
+                    android:text="🚗 轨迹巡航"
+                    android:textStyle="bold"
+                    android:textSize="13sp"
+                    app:cornerRadius="12dp" />
+            </com.google.android.material.button.MaterialButtonToggleGroup>
+
+            <!-- 坐标与海拔输入卡片 -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="纬度 (Lat)"
+                    app:boxCornerRadiusBottomEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusTopStart="12dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etLatitude"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="numberDecimal|numberSigned"
+                        android:text="26.586111"
+                        android:textSize="13sp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:hint="经度 (Lng)"
+                    app:boxCornerRadiusBottomEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusTopStart="12dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etLongitude"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="numberDecimal|numberSigned"
+                        android:text="104.830556"
+                        android:textSize="13sp" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="0.8"
+                    android:layout_marginStart="6dp"
+                    android:hint="海拔 (m)"
+                    app:boxCornerRadiusBottomEnd="12dp"
+                    app:boxCornerRadiusBottomStart="12dp"
+                    app:boxCornerRadiusTopEnd="12dp"
+                    app:boxCornerRadiusTopStart="12dp"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etAltitude"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="numberDecimal"
+                        android:text="50.0"
+                        android:textSize="13sp" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+
+            <!-- 巡航专属控制区（默认隐藏，切到巡航模式显示） -->
+            <LinearLayout
+                android:id="@+id/layoutCruiseParams"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 android:orientation="vertical"
-                android:padding="12dp">
+                android:visibility="gone">
 
-                <!-- 模式切换：单点模拟 vs 轨迹巡航 -->
-                <LinearLayout
+                <!-- 速度预设选择 Chips -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/speed_preset_label"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
+
+                <HorizontalScrollView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical">
-
-                    <com.google.android.material.button.MaterialButtonToggleGroup
-                        android:id="@+id/toggleModeGroup"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        app:singleSelection="true"
-                        app:selectionRequired="true">
-
-                        <Button
-                            android:id="@+id/btnModeSingle"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/mode_single_point"
-                            android:textSize="13sp" />
-
-                        <Button
-                            android:id="@+id/btnModeCruise"
-                            style="?attr/materialButtonOutlinedStyle"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="@string/mode_cruise"
-                            android:textSize="13sp" />
-                    </com.google.android.material.button.MaterialButtonToggleGroup>
-
-                    <Button
-                        android:id="@+id/btnOpenWhitelist"
-                        style="@style/Widget.MaterialComponents.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:text="@string/btn_open_whitelist"
-                        android:textColor="@color/secondary"
-                        android:textSize="12sp" />
-                </LinearLayout>
-
-                <!-- 坐标与海拔输入框 -->
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:hint="@string/label_latitude"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etLatitude"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="numberDecimal|numberSigned"
-                            android:text="39.908700"
-                            android:textSize="13sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="6dp"
-                        android:hint="@string/label_longitude"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etLongitude"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="numberDecimal|numberSigned"
-                            android:text="116.397500"
-                            android:textSize="13sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="0.8"
-                        android:layout_marginStart="6dp"
-                        android:hint="@string/label_altitude"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etAltitude"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="numberDecimal"
-                            android:text="50.0"
-                            android:textSize="13sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
-                </LinearLayout>
-
-                <!-- 巡航专属控制区（默认隐藏，切到巡航模式显示） -->
-                <LinearLayout
-                    android:id="@+id/layoutCruiseParams"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="vertical"
-                    android:visibility="gone">
-
-                    <!-- 速度预设选择 Chips -->
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/speed_preset_label"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
-
-                    <HorizontalScrollView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:scrollbars="none">
-
-                        <com.google.android.material.chip.ChipGroup
-                            android:id="@+id/chipGroupSpeed"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            app:singleSelection="true"
-                            app:selectionRequired="true">
-
-                            <com.google.android.material.chip.Chip
-                                android:id="@+id/chipSpeedWalk"
-                                style="@style/Widget.MaterialComponents.Chip.Choice"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/speed_walk" />
-
-                            <com.google.android.material.chip.Chip
-                                android:id="@+id/chipSpeedBike"
-                                style="@style/Widget.MaterialComponents.Chip.Choice"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/speed_bike" />
-
-                            <com.google.android.material.chip.Chip
-                                android:id="@+id/chipSpeedDrive"
-                                style="@style/Widget.MaterialComponents.Chip.Choice"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/speed_drive" />
-
-                            <com.google.android.material.chip.Chip
-                                android:id="@+id/chipSpeedCustom"
-                                style="@style/Widget.MaterialComponents.Chip.Choice"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="@string/speed_custom" />
-                        </com.google.android.material.chip.ChipGroup>
-                    </HorizontalScrollView>
-
-                    <!-- 自定义速度输入 (当选中自定义时展示) -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilCustomSpeed"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:hint="@string/label_custom_speed"
-                        android:visibility="gone"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etCustomSpeed"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="numberDecimal"
-                            android:text="5.0"
-                            android:textSize="13sp" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- 循环模式选择 -->
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        android:text="@string/loop_mode_label"
-                        android:textColor="@color/text_secondary"
-                        android:textSize="12sp" />
+                    android:scrollbars="none">
 
                     <com.google.android.material.chip.ChipGroup
-                        android:id="@+id/chipGroupLoopMode"
-                        android:layout_width="match_parent"
+                        android:id="@+id/chipGroupSpeed"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         app:singleSelection="true"
                         app:selectionRequired="true">
 
                         <com.google.android.material.chip.Chip
-                            android:id="@+id/chipLoopOneWay"
+                            android:id="@+id/chipSpeedWalk"
                             style="@style/Widget.MaterialComponents.Chip.Choice"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/loop_mode_one_way" />
+                            android:text="@string/speed_walk" />
 
                         <com.google.android.material.chip.Chip
-                            android:id="@+id/chipLoopPingPong"
+                            android:id="@+id/chipSpeedBike"
                             style="@style/Widget.MaterialComponents.Chip.Choice"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/loop_mode_ping_pong" />
+                            android:text="@string/speed_bike" />
 
                         <com.google.android.material.chip.Chip
-                            android:id="@+id/chipLoopLoop"
+                            android:id="@+id/chipSpeedDrive"
                             style="@style/Widget.MaterialComponents.Chip.Choice"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
-                            android:text="@string/loop_mode_loop" />
+                            android:text="@string/speed_drive" />
+
+                        <com.google.android.material.chip.Chip
+                            android:id="@+id/chipSpeedCustom"
+                            style="@style/Widget.MaterialComponents.Chip.Choice"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/speed_custom" />
                     </com.google.android.material.chip.ChipGroup>
-                </LinearLayout>
+                </HorizontalScrollView>
 
-                <!-- 动作控制按钮 -->
-                <!-- 单点模式按钮 -->
-                <Button
-                    android:id="@+id/btnToggleMock"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp"
-                    android:layout_marginTop="8dp"
-                    android:backgroundTint="@color/primary"
-                    android:text="@string/btn_start_mock"
-                    android:textColor="@color/text_on_primary" />
-
-                <!-- 巡航模式按钮组合 -->
-                <LinearLayout
-                    android:id="@+id/layoutCruiseActions"
+                <!-- 自定义速度输入 -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilCustomSpeed"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal"
-                    android:visibility="gone">
+                    android:layout_marginTop="4dp"
+                    android:hint="@string/label_custom_speed"
+                    android:visibility="gone"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
 
-                    <Button
-                        android:id="@+id/btnStartCruise"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_weight="1"
-                        android:backgroundTint="@color/mode_cruise"
-                        android:text="@string/btn_start_cruise"
-                        android:textColor="@color/text_on_primary" />
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etCustomSpeed"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="numberDecimal"
+                        android:text="5.0"
+                        android:textSize="13sp" />
+                </com.google.android.material.textfield.TextInputLayout>
 
-                    <Button
-                        android:id="@+id/btnPauseResumeCruise"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_weight="1"
-                        android:layout_marginStart="8dp"
-                        android:backgroundTint="@color/secondary"
-                        android:text="@string/btn_pause_cruise"
-                        android:textColor="@color/text_on_primary"
-                        android:enabled="false" />
+                <!-- 循环模式选择 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/loop_mode_label"
+                    android:textColor="@color/text_secondary"
+                    android:textSize="12sp" />
 
-                    <Button
-                        android:id="@+id/btnStopCruise"
-                        android:layout_width="0dp"
-                        android:layout_height="48dp"
-                        android:layout_weight="1"
-                        android:layout_marginStart="8dp"
-                        android:backgroundTint="@color/status_inactive"
-                        android:text="@string/btn_stop_cruise"
-                        android:textColor="@color/text_on_primary"
-                        android:enabled="false" />
-                </LinearLayout>
+                <com.google.android.material.chip.ChipGroup
+                    android:id="@+id/chipGroupLoopMode"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    app:singleSelection="true"
+                    app:selectionRequired="true">
 
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipLoopOneWay"
+                        style="@style/Widget.MaterialComponents.Chip.Choice"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/loop_mode_one_way" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipLoopPingPong"
+                        style="@style/Widget.MaterialComponents.Chip.Choice"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/loop_mode_ping_pong" />
+
+                    <com.google.android.material.chip.Chip
+                        android:id="@+id/chipLoopLoop"
+                        style="@style/Widget.MaterialComponents.Chip.Choice"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/loop_mode_loop" />
+                </com.google.android.material.chip.ChipGroup>
             </LinearLayout>
-        </com.google.android.material.card.MaterialCardView>
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
+            <!-- 核心启停操作按钮 -->
+            <!-- 单点模式大按钮 -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnToggleMock"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="12dp"
+                android:backgroundTint="@color/primary"
+                android:text="@string/btn_start_mock"
+                android:textColor="@color/text_on_primary"
+                android:textSize="15sp"
+                android:textStyle="bold"
+                app:cornerRadius="16dp"
+                app:elevation="4dp" />
+
+            <!-- 巡航模式按钮组合 -->
+            <LinearLayout
+                android:id="@+id/layoutCruiseActions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnStartCruise"
+                    android:layout_width="0dp"
+                    android:layout_height="50dp"
+                    android:layout_weight="1"
+                    android:backgroundTint="@color/mode_cruise"
+                    android:text="@string/btn_start_cruise"
+                    android:textColor="@color/text_on_primary"
+                    android:textStyle="bold"
+                    app:cornerRadius="14dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnPauseResumeCruise"
+                    android:layout_width="0dp"
+                    android:layout_height="50dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:backgroundTint="@color/secondary"
+                    android:text="@string/btn_pause_cruise"
+                    android:textColor="@color/text_on_primary"
+                    android:textStyle="bold"
+                    android:enabled="false"
+                    app:cornerRadius="14dp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/btnStopCruise"
+                    android:layout_width="0dp"
+                    android:layout_height="50dp"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:backgroundTint="@color/status_inactive"
+                    android:text="@string/btn_stop_cruise"
+                    android:textColor="@color/text_on_primary"
+                    android:textStyle="bold"
+                    android:enabled="false"
+                    app:cornerRadius="14dp" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </com.google.android.material.card.MaterialCardView>
 
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -1,6 +1,8 @@
 package com.mockloc.hook
 
 import android.location.Location
+import android.os.Handler
+import android.os.Looper
 import com.mockloc.data.MockConfigManager
 import com.mockloc.hook.cleaner.MockLocationCleaner
 import de.robv.android.xposed.XC_MethodHook
@@ -15,6 +17,8 @@ import java.lang.reflect.Proxy
  * 专门攻克微信、高德地图、企业微信、美团、百度地图等国内绝大部分使用第三方高阶定位 SDK 的应用。
  */
 object ThirdPartyLbsSdkHook {
+
+    private val mainHandler by lazy { Handler(Looper.getMainLooper()) }
 
     @JvmStatic
     fun initHooks(classLoader: ClassLoader) {
@@ -51,26 +55,26 @@ object ThirdPartyLbsSdkHook {
                         if (args.isEmpty()) return
 
                         val rawLoc = args[0]
-                        if (rawLoc != null && tencentLocationClass.isInstance(rawLoc)) {
-                            // 使用动态代理包装 TencentLocation 接口
-                            val proxyLocation = Proxy.newProxyInstance(
-                                tencentLocationClass.classLoader ?: classLoader,
-                                arrayOf(tencentLocationClass),
-                                TencentLocationInvocationHandler(rawLoc)
-                            )
-                            args[0] = proxyLocation
-                            // 确保错误码为 0 (成功)
-                            if (args.size >= 2) {
-                                args[1] = 0
-                            }
+                        // 使用动态代理包装 TencentLocation 接口
+                        val proxyLocation = Proxy.newProxyInstance(
+                            tencentLocationClass.classLoader ?: classLoader,
+                            arrayOf(tencentLocationClass),
+                            TencentLocationInvocationHandler(rawLoc)
+                        )
+                        args[0] = proxyLocation
+                        // 确保错误码为 0 (成功)
+                        if (args.size >= 2) {
+                            args[1] = 0
                         }
                     }
                 }
             )
 
-            // Hook TencentLocationManager.getLastKnownLocation()
+            // Hook TencentLocationManager 的定位请求与缓存方法
             try {
                 val tencentManagerClass = Class.forName("com.tencent.map.geolocation.TencentLocationManager", false, classLoader)
+
+                // 1) getLastKnownLocation()
                 XposedBridge.hookAllMethods(
                     tencentManagerClass,
                     "getLastKnownLocation",
@@ -78,16 +82,56 @@ object ThirdPartyLbsSdkHook {
                         override fun afterHookedMethod(param: MethodHookParam) {
                             if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
                             val originalResult = param.result
-                            if (originalResult != null && tencentLocationClass.isInstance(originalResult)) {
-                                param.result = Proxy.newProxyInstance(
-                                    tencentLocationClass.classLoader ?: classLoader,
-                                    arrayOf(tencentLocationClass),
-                                    TencentLocationInvocationHandler(originalResult)
-                                )
-                            }
+                            param.result = Proxy.newProxyInstance(
+                                tencentLocationClass.classLoader ?: classLoader,
+                                arrayOf(tencentLocationClass),
+                                TencentLocationInvocationHandler(originalResult)
+                            )
                         }
                     }
                 )
+
+                // 2) 拦截 requestLocationUpdates / requestSingleFreshLocation
+                // 在应用注册监听时，立即异步主动分发一次首帧模拟位置 (Synthetic Dispatch)
+                val requestMethods = arrayOf("requestLocationUpdates", "requestSingleFreshLocation")
+                for (methodName in requestMethods) {
+                    try {
+                        XposedBridge.hookAllMethods(
+                            tencentManagerClass,
+                            methodName,
+                            object : XC_MethodHook() {
+                                override fun afterHookedMethod(param: MethodHookParam) {
+                                    if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
+                                    val args = param.args ?: return
+                                    for (arg in args) {
+                                        if (arg != null && tencentListenerClass.isInstance(arg)) {
+                                            val listener = arg
+                                            mainHandler.postDelayed({
+                                                try {
+                                                    if (MockConfigManager.isMockEnabledForCurrentProcess()) {
+                                                        val proxyLoc = Proxy.newProxyInstance(
+                                                            tencentLocationClass.classLoader ?: classLoader,
+                                                            arrayOf(tencentLocationClass),
+                                                            TencentLocationInvocationHandler(null)
+                                                        )
+                                                        XposedHelpers.callMethod(
+                                                            listener,
+                                                            "onLocationChanged",
+                                                            proxyLoc,
+                                                            0,
+                                                            "OK"
+                                                        )
+                                                    }
+                                                } catch (_: Throwable) {}
+                                            }, 50)
+                                            break
+                                        }
+                                    }
+                                }
+                            }
+                        )
+                    } catch (_: Throwable) {}
+                }
             } catch (_: Throwable) {}
 
             XposedBridge.log("[MockLoc] Successfully installed Tencent Location SDK Hook")
@@ -99,7 +143,7 @@ object ThirdPartyLbsSdkHook {
     /**
      * 腾讯定位对象的动态代理处理器，全面拦截坐标、海拔、精度、方位与反检测字段
      */
-    private class TencentLocationInvocationHandler(private val original: Any) : InvocationHandler {
+    private class TencentLocationInvocationHandler(private val original: Any? = null) : InvocationHandler {
         override fun invoke(proxy: Any?, method: Method, args: Array<out Any>?): Any? {
             return when (method.name) {
                 "getLatitude" -> MockConfigManager.latitude
@@ -112,14 +156,37 @@ object ThirdPartyLbsSdkHook {
                 "getElapsedRealtime" -> android.os.SystemClock.elapsedRealtime()
                 "getSourceProvider" -> "gps"
                 "getProvider" -> "gps"
-                "getFake" -> 0 // 0 代表不是模拟位置
+                "getFake" -> 0 // 0 代表真实定位，非模拟
                 "isMockGps" -> 0
                 "getGps" -> 1
                 "getCoordinateType" -> 1 // 1: GCJ02, 0: WGS84
+                "getCity" -> ""
+                "getDistrict" -> ""
+                "getAddress" -> ""
+                "getName" -> ""
+                "toString" -> "TencentLocation{lat=${MockConfigManager.latitude},lng=${MockConfigManager.longitude}}"
+                "hashCode" -> 42
+                "equals" -> args?.getOrNull(0) === proxy
                 else -> {
-                    if (args != null) method.invoke(original, *args)
-                    else method.invoke(original)
+                    if (original != null) {
+                        if (args != null) method.invoke(original, *args)
+                        else method.invoke(original)
+                    } else {
+                        getDefaultValue(method.returnType)
+                    }
                 }
+            }
+        }
+
+        private fun getDefaultValue(returnType: Class<*>): Any? {
+            return when {
+                returnType == Boolean::class.javaPrimitiveType -> false
+                returnType == Int::class.javaPrimitiveType -> 0
+                returnType == Long::class.javaPrimitiveType -> 0L
+                returnType == Double::class.javaPrimitiveType -> 0.0
+                returnType == Float::class.javaPrimitiveType -> 0.0f
+                returnType == String::class.java -> ""
+                else -> null
             }
         }
     }
@@ -161,22 +228,53 @@ object ThirdPartyLbsSdkHook {
                 )
             }
 
-            // Hook AMapLocationClient.getLastKnownLocation()
+            // Hook AMapLocationClient 的缓存与启动方法
             try {
                 val amapClientClass = Class.forName("com.amap.api.location.AMapLocationClient", false, classLoader)
+
+                // getLastKnownLocation()
                 XposedBridge.hookAllMethods(
                     amapClientClass,
                     "getLastKnownLocation",
                     object : XC_MethodHook() {
                         override fun afterHookedMethod(param: MethodHookParam) {
                             if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
-                            val result = param.result
+                            var result = param.result
+                            if (result == null) {
+                                try {
+                                    result = amapLocationClass.getConstructor(String::class.java).newInstance("gps")
+                                    param.result = result
+                                } catch (_: Throwable) {}
+                            }
                             if (result != null && amapLocationClass.isInstance(result)) {
                                 sanitizeAmapLocation(result)
                             }
                         }
                     }
                 )
+
+                // setLocationListener / startLocation 时主动触发首帧
+                if (amapListenerClass != null) {
+                    XposedBridge.hookAllMethods(
+                        amapClientClass,
+                        "setLocationListener",
+                        object : XC_MethodHook() {
+                            override fun afterHookedMethod(param: MethodHookParam) {
+                                if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
+                                val listener = param.args?.getOrNull(0) ?: return
+                                mainHandler.postDelayed({
+                                    try {
+                                        if (MockConfigManager.isMockEnabledForCurrentProcess()) {
+                                            val loc = amapLocationClass.getConstructor(String::class.java).newInstance("gps")
+                                            sanitizeAmapLocation(loc)
+                                            XposedHelpers.callMethod(listener, "onLocationChanged", loc)
+                                        }
+                                    } catch (_: Throwable) {}
+                                }, 50)
+                            }
+                        }
+                    )
+                }
             } catch (_: Throwable) {}
 
             XposedBridge.log("[MockLoc] Successfully installed AMap Location SDK Hook")

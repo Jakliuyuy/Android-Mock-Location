@@ -43,6 +43,7 @@ class LocationConfigProvider : ContentProvider() {
     override fun onCreate(): Boolean {
         context?.let { ctx ->
             try {
+                com.mockloc.data.MockPrefs.loadConfig(ctx)
                 WhitelistRepository.getInstance(ctx)
             } catch (_: Throwable) {}
         }
@@ -52,6 +53,7 @@ class LocationConfigProvider : ContentProvider() {
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
         context?.let { ctx ->
             try {
+                com.mockloc.data.MockPrefs.loadConfig(ctx)
                 WhitelistRepository.getInstance(ctx)
             } catch (_: Throwable) {}
         }

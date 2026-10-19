@@ -70,6 +70,8 @@
     <string name="whitelist_summary_format">已选择 %1$d / %2$d 个应用</string>
     <string name="whitelist_empty">未找到匹配的应用程序</string>
     <string name="whitelist_saved">白名单配置已实时同步</string>
+    <string name="whitelist_dialog_title">白名单提示</string>
+    <string name="whitelist_empty_warning">当前尚未勾选任何生效目标应用，模拟定位可能不会对特定应用生效。是否仍然开启？</string>
 
     <!-- Messages & Validation -->
     <string name="invalid_coordinates">请输入合法的经纬度 (-90~90, -180~180)</string>
@@ -79,4 +81,10 @@
     <string name="cruise_paused">巡航已暂停</string>
     <string name="cruise_resumed">巡航已继续</string>
     <string name="cruise_stopped">巡航已停止</string>
+    <string name="btn_favorites">我的收藏</string>
+    <string name="btn_add_favorite">收藏此点</string>
+    <string name="dialog_add_fav_title">收藏当前选点</string>
+    <string name="dialog_add_fav_hint">请输入地点名称 (如: 六盘水凉都公园)</string>
+    <string name="fav_added_success">已成功加入收藏夹</string>
+    <string name="fav_deleted">已移除收藏</string>
 </resources>

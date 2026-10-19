@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <queries>
         <intent>
@@ -59,6 +62,10 @@
             android:authorities="com.mockloc.configprovider"
             android:exported="true"
             android:multiprocess="false" />
+        <service
+            android:name=".service.MockService"
+            android:foregroundServiceType="location"
+            android:exported="false" />
     </application>
 
 </manifest>
