@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MockLocation</string>
+    <string name="app_description">双模安卓模拟定位 Xposed &amp; Root 模块</string>
+
+    <!-- Toolbar & Titles -->
+    <string name="title_control_center">模拟定位控制中心</string>
+    <string name="title_whitelist">生效目标应用白名单</string>
+
+    <!-- Environment Status -->
+    <string name="status_title">运行环境与授权状态</string>
+    <string name="status_xposed">Xposed / LSPosed:</string>
+    <string name="status_root">Root 提权:</string>
+    <string name="status_active">已激活</string>
+    <string name="status_inactive">未激活</string>
+    <string name="status_available">已授权</string>
+    <string name="status_unavailable">未授权</string>
+    <string name="status_recommended_mode">推荐模式:</string>
+    <string name="mode_xposed_hook">Xposed 深度 Hook 模式 (免 Mock 标记)</string>
+    <string name="mode_root_provider">Root 原生系统 Provider 模式</string>
+    <string name="mode_unprivileged">无权限模式 (请激活 Xposed 或授予 Root)</string>
+
+    <!-- Operating Mode Switcher -->
+    <string name="mode_switcher_label">运行模式</string>
+    <string name="mode_single_point">单点模拟</string>
+    <string name="mode_cruise">轨迹巡航</string>
+
+    <!-- Search & Location -->
+    <string name="search_hint">搜索地点、城市或地标 (如: 天安门, 西湖)</string>
+    <string name="search_action">搜索</string>
+    <string name="search_no_results">未找到匹配的地点</string>
+    <string name="search_select_title">选择目标地点</string>
+
+    <!-- Coordinate Inputs -->
+    <string name="label_latitude">纬度 (Lat)</string>
+    <string name="label_longitude">经度 (Lng)</string>
+    <string name="label_altitude">海拔 (Alt, m)</string>
+    <string name="hint_latitude">例如 39.9087</string>
+    <string name="hint_longitude">例如 116.3975</string>
+    <string name="hint_altitude">例如 50.0</string>
+
+    <!-- Speed Presets -->
+    <string name="speed_preset_label">巡航速度</string>
+    <string name="speed_walk">步行 (5 km/h)</string>
+    <string name="speed_bike">骑行 (15 km/h)</string>
+    <string name="speed_drive">驾车 (60 km/h)</string>
+    <string name="speed_custom">自定义</string>
+    <string name="label_custom_speed">速度 (m/s)</string>
+
+    <!-- Loop Modes -->
+    <string name="loop_mode_label">巡航模式</string>
+    <string name="loop_mode_one_way">单向行驶</string>
+    <string name="loop_mode_ping_pong">往返折返</string>
+    <string name="loop_mode_loop">闭环循环</string>
+
+    <!-- Cruise Controls -->
+    <string name="btn_start_mock">开启单点模拟</string>
+    <string name="btn_stop_mock">停止模拟</string>
+    <string name="btn_start_cruise">开始巡航</string>
+    <string name="btn_pause_cruise">暂停</string>
+    <string name="btn_resume_cruise">继续</string>
+    <string name="btn_stop_cruise">停止巡航</string>
+    <string name="btn_open_whitelist">目标应用分流白名单</string>
+
+    <!-- Whitelist Activity -->
+    <string name="search_apps_hint">搜索已安装应用名称或包名</string>
+    <string name="filter_system_apps">显示系统应用</string>
+    <string name="action_select_all">全选</string>
+    <string name="action_deselect_all">清空</string>
+    <string name="whitelist_summary_format">已选择 %1$d / %2$d 个应用</string>
+    <string name="whitelist_empty">未找到匹配的应用程序</string>
+    <string name="whitelist_saved">白名单配置已实时同步</string>
+
+    <!-- Messages & Validation -->
+    <string name="invalid_coordinates">请输入合法的经纬度 (-90~90, -180~180)</string>
+    <string name="mock_started">模拟定位已开启</string>
+    <string name="mock_stopped">模拟定位已停止</string>
+    <string name="cruise_started">轨迹巡航已开始</string>
+    <string name="cruise_paused">巡航已暂停</string>
+    <string name="cruise_resumed">巡航已继续</string>
+    <string name="cruise_stopped">巡航已停止</string>
+</resources>

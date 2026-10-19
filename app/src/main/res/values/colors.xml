@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Primary -->
+    <color name="primary">#1976D2</color>
+    <color name="primary_dark">#0D47A1</color>
+    <color name="primary_light">#BBDEFB</color>
+    <color name="primary_variant">#1565C0</color>
+
+    <!-- Brand Secondary / Accent -->
+    <color name="secondary">#00897B</color>
+    <color name="secondary_dark">#004D40</color>
+    <color name="secondary_light">#80CBC4</color>
+
+    <!-- Background and Surface -->
+    <color name="background">#F5F7FA</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="card_background">#FFFFFF</color>
+    <color name="divider">#E0E0E0</color>
+
+    <!-- Text Colors -->
+    <color name="text_primary">#212121</color>
+    <color name="text_secondary">#757575</color>
+    <color name="text_hint">#9E9E9E</color>
+    <color name="text_on_primary">#FFFFFF</color>
+
+    <!-- Status Colors -->
+    <color name="status_active">#2E7D32</color>
+    <color name="status_active_bg">#E8F5E9</color>
+    <color name="status_inactive">#C62828</color>
+    <color name="status_inactive_bg">#FFEBEE</color>
+    <color name="status_warning">#EF6C00</color>
+    <color name="status_warning_bg">#FFF3E0</color>
+
+    <!-- Mode Accent -->
+    <color name="mode_single_point">#1E88E5</color>
+    <color name="mode_cruise">#FB8C00</color>
+
+    <!-- Map Elements -->
+    <color name="route_polyline">#2979FF</color>
+    <color name="route_polyline_outline">#1565C0</color>
+</resources>
