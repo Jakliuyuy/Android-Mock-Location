@@ -8,6 +8,8 @@ import android.net.Uri
 import android.os.Bundle
 import com.mockloc.data.MockConfigManager
 
+import com.mockloc.data.WhitelistRepository
+
 /**
  * 跨进程配置同步桥接 ContentProvider。
  * 在 Android 7.0+ 及 SELinux Enforcing 模式下，允许被注入 Hook 的目标应用进程
@@ -39,10 +41,20 @@ class LocationConfigProvider : ContentProvider() {
     }
 
     override fun onCreate(): Boolean {
+        context?.let { ctx ->
+            try {
+                WhitelistRepository.getInstance(ctx)
+            } catch (_: Throwable) {}
+        }
         return true
     }
 
     override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
+        context?.let { ctx ->
+            try {
+                WhitelistRepository.getInstance(ctx)
+            } catch (_: Throwable) {}
+        }
         return when (method) {
             MockConfigManager.METHOD_GET_CONFIG -> {
                 val bundle = MockConfigManager.toBundle()

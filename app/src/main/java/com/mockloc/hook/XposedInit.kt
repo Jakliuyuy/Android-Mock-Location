@@ -10,6 +10,7 @@ import com.mockloc.data.MockConfigManager
 import com.mockloc.ipc.LocationConfigProvider
 import de.robv.android.xposed.IXposedHookLoadPackage
 import de.robv.android.xposed.XC_MethodHook
+import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
 import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
@@ -24,11 +25,25 @@ class XposedInit : IXposedHookLoadPackage {
     override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
         val packageName = lpparam.packageName ?: return
 
-        // 过滤系统底层服务与自身主控进程
-        if (packageName == "android" ||
-            packageName == "com.android.systemui" ||
-            packageName == "com.mockloc"
-        ) {
+        // 1. 如果是自身主控应用进程：Hook 激活检测锚点方法使 UI 显示“已激活”
+        if (packageName == "com.mockloc") {
+            try {
+                XposedHelpers.findAndHookMethod(
+                    "com.mockloc.root.EnvironmentDetector",
+                    lpparam.classLoader,
+                    "isModuleActive",
+                    XC_MethodReplacement.returnConstant(true)
+                )
+                XposedBridge.log("[MockLoc] Successfully activated: hooked isModuleActive() for self package")
+            } catch (t: Throwable) {
+                XposedBridge.log("[MockLoc] Hook self isModuleActive failed: ${t.message}")
+            }
+            return
+        }
+
+        // 2. 过滤系统基础框架与状态栏（系统框架建议走应用级拦截以保安全）
+        if (packageName == "android" || packageName == "com.android.systemui") {
+            XposedBridge.log("[MockLoc] System package $packageName bypassed (app-level isolation)")
             return
         }
 

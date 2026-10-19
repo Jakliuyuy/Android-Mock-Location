@@ -93,6 +93,9 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // 确保从持久化存储恢复目标应用白名单到内存
+        com.mockloc.data.WhitelistRepository.getInstance(this)
+
         initViews()
         setupMap()
         setupListeners()

@@ -2,6 +2,7 @@
 <resources>
     <!-- LSPosed 官方推荐作用域列表 (xposedscope) -->
     <string-array name="xposed_scope">
+        <item>com.mockloc</item>
         <item>com.autonavi.minimap</item>
         <item>com.baidu.BaiduMap</item>
         <item>com.tencent.map</item>
