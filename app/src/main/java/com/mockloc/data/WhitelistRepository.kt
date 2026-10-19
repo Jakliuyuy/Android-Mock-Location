@@ -20,6 +20,13 @@ class WhitelistRepository(
         const val PREFS_NAME = "mockloc_whitelist_prefs"
         const val KEY_WHITELIST_PACKAGES = "key_whitelist_packages"
 
+        val DEFAULT_PACKAGES = setOf(
+            "com.autonavi.minimap",
+            "com.tencent.mm",
+            "com.tencent.wework",
+            "com.sankuai.meituan"
+        )
+
         @Volatile
         private var instance: WhitelistRepository? = null
 
@@ -152,7 +159,7 @@ class WhitelistRepository(
     fun loadSelectedPackages(): Set<String> {
         return if (prefs != null) {
             val set = prefs.getStringSet(KEY_WHITELIST_PACKAGES, null)
-            set?.toSet() ?: emptySet()
+            set?.toSet() ?: DEFAULT_PACKAGES
         } else {
             inMemorySelectedPackages.toSet()
         }

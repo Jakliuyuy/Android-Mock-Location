@@ -56,6 +56,9 @@ class XposedInit : IXposedHookLoadPackage {
         // 2. 初始化基站与 WiFi 反检测拦截引擎
         NetworkAntiDetectHook.initHooks(lpparam.classLoader)
 
+        // 3. 初始化第三方主流地图与定位 SDK 拦截引擎 (微信/腾讯定位、高德定位、百度定位)
+        ThirdPartyLbsSdkHook.initHooks(lpparam.classLoader)
+
         // 3. 挂钩 Application.attachBaseContext 获取 Context，在最早生命周期拉取跨进程配置
         try {
             XposedHelpers.findAndHookMethod(
