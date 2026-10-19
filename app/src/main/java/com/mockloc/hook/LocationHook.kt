@@ -252,16 +252,7 @@ class LocationHook {
                             for (i in args.indices) {
                                 val arg = args[i] ?: continue
                                 if (arg is LocationListener) {
-                                    val proxy = getOrCreateProxyListener(arg, classLoader)
-                                    args[i] = proxy
-                                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                        try {
-                                            if (MockConfigManager.isMockEnabledForCurrentProcess()) {
-                                                val loc = MockConfigManager.createMockLocation(LocationManager.GPS_PROVIDER)
-                                                proxy.onLocationChanged(loc)
-                                            }
-                                        } catch (_: Throwable) {}
-                                    }, 50)
+                                    args[i] = getOrCreateProxyListener(arg, classLoader)
                                     break
                                 }
                             }
@@ -284,16 +275,7 @@ class LocationHook {
                             for (i in args.indices) {
                                 val arg = args[i] ?: continue
                                 if (arg is LocationListener) {
-                                    val proxy = getOrCreateProxyListener(arg, classLoader)
-                                    args[i] = proxy
-                                    android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                                        try {
-                                            if (MockConfigManager.isMockEnabledForCurrentProcess()) {
-                                                val loc = MockConfigManager.createMockLocation(LocationManager.GPS_PROVIDER)
-                                                proxy.onLocationChanged(loc)
-                                            }
-                                        } catch (_: Throwable) {}
-                                    }, 50)
+                                    args[i] = getOrCreateProxyListener(arg, classLoader)
                                     break
                                 }
                             }

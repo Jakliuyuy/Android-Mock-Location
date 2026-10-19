@@ -28,7 +28,6 @@ import com.mockloc.R
 import com.mockloc.data.FavoriteLocation
 import com.mockloc.data.FavoriteRepository
 import com.mockloc.data.MockConfigManager
-import com.mockloc.data.MockPrefs
 import com.mockloc.data.WhitelistRepository
 import com.mockloc.domain.engine.CruiseConfig
 import com.mockloc.domain.engine.CruiseEngine
@@ -52,8 +51,8 @@ import kotlinx.coroutines.withContext
 import org.osmdroid.views.MapView
 
 /**
- * 模拟定位主控中心 Activity (Modern Material 3 Redesign)
- * 提供地图浏览打点、地点搜索、单点位置欺骗、轨迹巡航步进仿真、Root/Xposed环境监测、白名单分流及地点收藏夹。
+ * 模拟定位主控中心 Activity
+ * 双模架构：Xposed 深度 Hook + Root TestProvider，支持单点与轨迹巡航双模驱动
  */
 class MainActivity : AppCompatActivity() {
 
@@ -109,11 +108,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 确保从持久化存储恢复配置与白名单
-        try {
-            MockPrefs.loadConfig(this)
-            whitelistRepository.loadSelectedPackages()
-        } catch (_: Throwable) {}
+        // 确保从持久化存储预加载目标应用白名单
+        whitelistRepository.loadSelectedPackages()
 
         initViews()
         setupMap()
@@ -407,20 +403,17 @@ class MainActivity : AppCompatActivity() {
 
     private fun toggleSinglePointMock() {
         if (MockConfigManager.isMockEnabled) {
-            // 停止模拟
+            // 停止单点模拟
             MockConfigManager.isMockEnabled = false
-            try {
-                MockPrefs.saveConfig(this)
-            } catch (_: Throwable) {}
 
             singlePointJob?.cancel()
             singlePointJob = null
 
-            try {
-                if (rootProviderManager.isRunning) {
+            if (EnvironmentDetector.isRootAvailable() && rootProviderManager.isRunning) {
+                try {
                     rootProviderManager.stopMock()
-                }
-            } catch (_: Throwable) {}
+                } catch (_: Throwable) {}
+            }
 
             broadcastConfigChange()
             updateMockButtonState(false)
@@ -454,36 +447,59 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun applySinglePointMock(point: GeoPoint) {
+        // 先停掉巡航协程
+        if (cruiseJob != null) {
+            stopCruiseSimulation()
+        }
+
         MockConfigManager.latitude = point.latitude
         MockConfigManager.longitude = point.longitude
         MockConfigManager.altitude = point.altitude
+        MockConfigManager.speed = 0.0f
+        MockConfigManager.bearing = 0.0f
         MockConfigManager.isMockEnabled = true
 
-        // 立即持久化配置
-        try {
-            MockPrefs.saveConfig(this)
-        } catch (_: Throwable) {}
+        // 1. 初始化 Root TestProvider (若具备 Root)
+        if (EnvironmentDetector.isRootAvailable()) {
+            try {
+                rootProviderManager.grantMockPermissionWithSu(packageName)
+            } catch (_: Throwable) {}
 
-        // 1. 触发跨进程广播同步
+            try {
+                if (!rootProviderManager.isRunning) {
+                    rootProviderManager.startMock(
+                        lat = point.latitude,
+                        lng = point.longitude,
+                        alt = point.altitude
+                    )
+                }
+            } catch (_: Throwable) {}
+        }
+
+        // 2. 立即广播一次
         broadcastConfigChange()
 
-        // 2. 启动协程脉冲心跳（与轨迹巡航机制一致，安全无崩溃）
+        // 3. 启动与轨迹巡航完全一致的持续脉冲协程 (每秒灌入一次，杜绝静止死数据)
         singlePointJob?.cancel()
         singlePointJob = lifecycleScope.launch(Dispatchers.Default) {
             var tick = 0
             while (isActive && MockConfigManager.isMockEnabled && !isCruiseMode) {
                 tick++
+                // 拟真微抖动 (0.000001度 ~ 0.1米，持续产生事件)
                 val jitterLat = Math.sin(tick.toDouble()) * 0.000001
                 val jitterLng = Math.cos(tick.toDouble()) * 0.000001
-                val curLat = MockConfigManager.latitude + jitterLat
-                val curLng = MockConfigManager.longitude + jitterLng
+                val curLat = point.latitude + jitterLat
+                val curLng = point.longitude + jitterLng
+
+                MockConfigManager.latitude = curLat
+                MockConfigManager.longitude = curLng
 
                 if (EnvironmentDetector.isRootAvailable() && rootProviderManager.isRunning) {
                     try {
                         rootProviderManager.updateLocation(
                             lat = curLat,
                             lng = curLng,
-                            alt = MockConfigManager.altitude,
+                            alt = point.altitude,
                             speed = 0.0f,
                             bearing = 0.0f,
                             accuracy = 3.0f
@@ -491,36 +507,10 @@ class MainActivity : AppCompatActivity() {
                     } catch (_: Throwable) {}
                 }
 
-                if (tick % 2 == 0) {
-                    broadcastConfigChange()
-                }
-
+                broadcastConfigChange()
                 delay(1000)
             }
         }
-
-        // 3. 如果具备 Root 权限，同步向系统 TestProvider 注册并投递坐标
-        try {
-            if (EnvironmentDetector.isRootAvailable()) {
-                try {
-                    rootProviderManager.grantMockPermissionWithSu(packageName)
-                } catch (_: Throwable) {}
-
-                if (!rootProviderManager.isRunning) {
-                    rootProviderManager.startMock(
-                        lat = point.latitude,
-                        lng = point.longitude,
-                        alt = point.altitude
-                    )
-                } else {
-                    rootProviderManager.updateLocation(
-                        lat = point.latitude,
-                        lng = point.longitude,
-                        alt = point.altitude
-                    )
-                }
-            }
-        } catch (_: Throwable) {}
     }
 
     // ==========================================
@@ -679,9 +669,23 @@ class MainActivity : AppCompatActivity() {
         cruiseEngine.start()
 
         MockConfigManager.isMockEnabled = true
-        try {
-            MockPrefs.saveConfig(this)
-        } catch (_: Throwable) {}
+
+        // 确保 Root TestProvider 启动
+        if (EnvironmentDetector.isRootAvailable()) {
+            try {
+                rootProviderManager.grantMockPermissionWithSu(packageName)
+            } catch (_: Throwable) {}
+
+            try {
+                if (!rootProviderManager.isRunning) {
+                    rootProviderManager.startMock(
+                        lat = startPoint.latitude,
+                        lng = startPoint.longitude,
+                        alt = startPoint.altitude
+                    )
+                }
+            } catch (_: Throwable) {}
+        }
 
         btnStartCruise.isEnabled = false
         btnPauseResumeCruise.isEnabled = true
