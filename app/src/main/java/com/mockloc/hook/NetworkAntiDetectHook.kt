@@ -1,231 +1,329 @@
 package com.mockloc.hook
 
-import android.net.wifi.ScanResult
 import android.net.wifi.WifiInfo
-import android.net.wifi.WifiManager
+import android.os.Build
 import android.telephony.CellInfo
-import android.telephony.PhoneStateListener
-import android.telephony.TelephonyManager
-import com.mockloc.data.MockConfigManager
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
-import java.lang.reflect.Field
-import java.util.ArrayList
-import java.util.Collections
+import android.telephony.gsm.GsmCellLocation
+import com.mockloc.data.config.MockConfig
+import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.abs
 
-/**
- * 纯逻辑网络与基站反检测过滤器。
- * 解耦 Xposed 运行时，可在 JVM 单元测试中直接覆盖验证。
- */
-object NetworkAntiDetectFilter {
+class NetworkAntiDetectHook(
+    private val backend: HookBackend = XposedHookBackend,
+    private val configProvider: ConfigSnapshotProvider = HookConfigStore.shared,
+    private val cellLocationFactory: (MockConfig) -> Any? = ::defaultSanitizedCellLocation,
+    private val wifiInfoSanitizer: (Any?, MockConfig) -> Any? = ::defaultSanitizeWifiInfo,
+    private val sdkIntProvider: () -> Int = { Build.VERSION.SDK_INT }
+) {
+    private val installedLoaders = ConcurrentHashMap.newKeySet<String>()
+    private val hookedConcreteCallbacks = ConcurrentHashMap.newKeySet<String>()
 
-    const val MASKED_BSSID: String = "02:00:00:00:00:00"
+    fun install(classLoader: ClassLoader?, targetPackage: String) {
+        val loaderKey = "${System.identityHashCode(classLoader)}#$targetPackage"
+        if (!installedLoaders.add(loaderKey)) return
 
-    /**
-     * 过滤基站列表：若防检测拦截生效，返回空列表，阻断基站指纹泄露
-     */
-    fun <T> filterCellInfo(cells: List<T>?, isEnabled: Boolean): List<T> {
-        return if (isEnabled) {
-            emptyList()
-        } else {
-            cells ?: emptyList()
-        }
+        hookTelephony(classLoader, targetPackage)
+        hookWifiAndConnectivity(classLoader, targetPackage)
     }
 
-    /**
-     * 过滤 WiFi 扫描热点列表：若防检测拦截生效，返回空列表，阻断周边物理 AP 泄露
-     */
-    fun <T> filterScanResults(results: List<T>?, isEnabled: Boolean): List<T> {
-        return if (isEnabled) {
-            emptyList()
-        } else {
-            results ?: emptyList()
-        }
+    private fun shouldSpoofCell(targetPackage: String): Boolean {
+        val cfg = configProvider.currentConfig()
+        return cfg.isEnabledForPackage(targetPackage) && cfg.antiDetectCellEnabled
     }
 
-    /**
-     * 抹除/伪造 WifiInfo 中的真实物理热点 MAC 地址 (BSSID)
-     * 通过反射将 mBSSID 字段重写为标准虚拟掩码 "02:00:00:00:00:00"
-     */
-    fun sanitizeWifiInfoBssid(wifiInfo: Any?, isEnabled: Boolean): Boolean {
-        if (!isEnabled || wifiInfo == null) return false
+    private fun shouldSpoofWifi(targetPackage: String): Boolean {
+        val cfg = configProvider.currentConfig()
+        return cfg.isEnabledForPackage(targetPackage) && cfg.antiDetectWifiEnabled
+    }
 
-        var success = false
-        var currentClass: Class<*>? = wifiInfo.javaClass
-        while (currentClass != null && currentClass != Any::class.java) {
-            for (fieldName in arrayOf("mBSSID", "bssid", "mBssid")) {
-                try {
-                    val field = currentClass.getDeclaredField(fieldName)
-                    field.isAccessible = true
-                    field.set(wifiInfo, MASKED_BSSID)
-                    success = true
-                    break
-                } catch (_: NoSuchFieldException) {
-                } catch (_: Throwable) {}
+    private fun hookTelephony(classLoader: ClassLoader?, targetPackage: String) {
+        val telephonyCls = backend.findClassIfExists("android.telephony.TelephonyManager", classLoader)
+            ?: return
+
+        backend.hookAllMethods(
+            telephonyCls,
+            "getAllCellInfo",
+            after = MethodHookHandler { inv ->
+                if (shouldSpoofCell(targetPackage)) {
+                    inv.result = emptyList<CellInfo>()
+                }
             }
-            if (success) break
-            currentClass = currentClass.superclass
+        )
+
+        backend.hookAllMethods(
+            telephonyCls,
+            "getCellLocation",
+            after = MethodHookHandler { inv ->
+                if (shouldSpoofCell(targetPackage)) {
+                    inv.result = cellLocationFactory(configProvider.currentConfig())
+                }
+            }
+        )
+
+        // API 34+ 已移除 getNeighboringCellInfo，必须使用运行时方法名字符串探测
+        val hasNeighboring = runCatching {
+            telephonyCls.methods.any { it.name == "getNeighboringCellInfo" }
+        }.getOrDefault(false)
+        if (hasNeighboring) {
+            backend.hookAllMethods(
+                telephonyCls,
+                "getNeighboringCellInfo",
+                after = MethodHookHandler { inv ->
+                    if (shouldSpoofCell(targetPackage)) {
+                        inv.result = emptyList<Any>()
+                    }
+                }
+            )
         }
-        return success
+
+        backend.hookAllMethods(
+            telephonyCls,
+            "requestCellInfoUpdate",
+            before = MethodHookHandler { inv ->
+                val callback = inv.args.getOrNull(1) ?: return@MethodHookHandler
+                val implClass = callback.javaClass
+                if (implClass.isInterface ||
+                    implClass.name == "android.telephony.TelephonyManager\$CellInfoCallback"
+                ) {
+                    return@MethodHookHandler
+                }
+                HookMethodUtils.hookConcreteMethodHierarchy(
+                    backend = backend,
+                    hookedMethodKeys = hookedConcreteCallbacks,
+                    implClass = implClass,
+                    methodName = "onCellInfo",
+                    before = MethodHookHandler { cbInv ->
+                        if (shouldSpoofCell(targetPackage) && cbInv.args.isNotEmpty()) {
+                            cbInv.args[0] = emptyList<CellInfo>()
+                        }
+                    }
+                )
+            }
+        )
+
+        val telephonyCallbackBase = backend.findClassIfExists(
+            "android.telephony.TelephonyCallback",
+            classLoader
+        )
+        backend.hookAllMethods(
+            telephonyCls,
+            "registerTelephonyCallback",
+            before = MethodHookHandler { inv ->
+                val callback = inv.args.lastOrNull { arg ->
+                    arg != null && (telephonyCallbackBase == null || telephonyCallbackBase.isInstance(arg))
+                } ?: return@MethodHookHandler
+
+                val implClass = callback.javaClass
+                if (implClass.isInterface || implClass.name == "android.telephony.TelephonyCallback") {
+                    return@MethodHookHandler
+                }
+                hookCellCallbackConcreteClass(implClass, targetPackage)
+            }
+        )
+
+        val phoneStateListenerBase = backend.findClassIfExists(
+            "android.telephony.PhoneStateListener",
+            classLoader
+        )
+        backend.hookAllMethods(
+            telephonyCls,
+            "listen",
+            before = MethodHookHandler { inv ->
+                val listener = inv.args.firstOrNull() ?: return@MethodHookHandler
+                if (phoneStateListenerBase != null && !phoneStateListenerBase.isInstance(listener)) {
+                    return@MethodHookHandler
+                }
+                val implClass = listener.javaClass
+                if (implClass.isInterface || implClass.name == "android.telephony.PhoneStateListener") {
+                    return@MethodHookHandler
+                }
+                hookCellCallbackConcreteClass(implClass, targetPackage)
+            }
+        )
     }
 
-    /**
-     * 判断是否应阻断硬件级主动 WiFi 扫描
-     */
-    fun shouldSuppressWifiScan(isEnabled: Boolean): Boolean = isEnabled
-}
+    private fun hookCellCallbackConcreteClass(implClass: Class<*>, targetPackage: String) {
+        if (implClass.isInterface) return
+        HookMethodUtils.hookConcreteMethodHierarchy(
+            backend = backend,
+            hookedMethodKeys = hookedConcreteCallbacks,
+            implClass = implClass,
+            methodName = "onCellInfoChanged",
+            before = MethodHookHandler { cbInv ->
+                if (shouldSpoofCell(targetPackage) && cbInv.args.isNotEmpty()) {
+                    cbInv.args[0] = emptyList<CellInfo>()
+                }
+            }
+        )
 
-/**
- * 网络特征反定位 Hook 引擎 (Telephony & WiFi Anti-Detection Hook)
- * 拦截 TelephonyManager 与 WifiManager，彻底切断应用通过基站与 WiFi 扫描获取真实物理位置的途径。
- */
-class NetworkAntiDetectHook {
+        HookMethodUtils.hookConcreteMethodHierarchy(
+            backend = backend,
+            hookedMethodKeys = hookedConcreteCallbacks,
+            implClass = implClass,
+            methodName = "onCellLocationChanged",
+            before = MethodHookHandler { cbInv ->
+                if (shouldSpoofCell(targetPackage) && cbInv.args.isNotEmpty()) {
+                    cbInv.args[0] = cellLocationFactory(configProvider.currentConfig())
+                }
+            }
+        )
+    }
+
+    private fun hookWifiAndConnectivity(classLoader: ClassLoader?, targetPackage: String) {
+        val wifiMgrCls = backend.findClassIfExists("android.net.wifi.WifiManager", classLoader)
+        if (wifiMgrCls != null) {
+            backend.hookAllMethods(
+                wifiMgrCls,
+                "getScanResults",
+                after = MethodHookHandler { inv ->
+                    if (shouldSpoofWifi(targetPackage)) {
+                        inv.result = emptyList<Any>()
+                    }
+                }
+            )
+
+            backend.hookAllMethods(
+                wifiMgrCls,
+                "startScan",
+                after = MethodHookHandler { inv ->
+                    if (shouldSpoofWifi(targetPackage)) {
+                        inv.result = true
+                    }
+                }
+            )
+
+            backend.hookAllMethods(
+                wifiMgrCls,
+                "getConnectionInfo",
+                after = MethodHookHandler { inv ->
+                    if (shouldSpoofWifi(targetPackage) && inv.result != null) {
+                        inv.result = wifiInfoSanitizer(inv.result, configProvider.currentConfig())
+                    }
+                }
+            )
+
+            backend.hookAllMethods(
+                wifiMgrCls,
+                "registerScanResultsCallback",
+                before = MethodHookHandler { inv ->
+                    val callback = inv.args.getOrNull(1) ?: return@MethodHookHandler
+                    val implClass = callback.javaClass
+                    if (implClass.isInterface ||
+                        implClass.name == "android.net.wifi.WifiManager\$ScanResultsCallback"
+                    ) {
+                        return@MethodHookHandler
+                    }
+                    HookMethodUtils.hookConcreteMethodHierarchy(
+                        backend = backend,
+                        hookedMethodKeys = hookedConcreteCallbacks,
+                        implClass = implClass,
+                        methodName = "onScanResultsAvailable",
+                        before = MethodHookHandler { _ ->
+                            // 保持回调通知不阻塞，实际数据通过 getScanResults() 返回空列表脱敏
+                        }
+                    )
+                }
+            )
+        }
+
+        val netCapsCls = backend.findClassIfExists("android.net.NetworkCapabilities", classLoader)
+        val wifiInfoCls = backend.findClassIfExists("android.net.wifi.WifiInfo", classLoader)
+
+        if (netCapsCls != null) {
+            backend.hookAllMethods(
+                netCapsCls,
+                "getTransportInfo",
+                after = MethodHookHandler { inv ->
+                    if (!shouldSpoofWifi(targetPackage)) return@MethodHookHandler
+                    val info = inv.result ?: return@MethodHookHandler
+                    if (wifiInfoCls == null || wifiInfoCls.isInstance(info)) {
+                        inv.result = wifiInfoSanitizer(info, configProvider.currentConfig())
+                    }
+                }
+            )
+        }
+
+        if (wifiInfoCls != null) {
+            backend.hookAllMethods(
+                wifiInfoCls,
+                "getBSSID",
+                after = MethodHookHandler { inv ->
+                    if (shouldSpoofWifi(targetPackage)) inv.result = SANITIZED_BSSID
+                }
+            )
+            backend.hookAllMethods(
+                wifiInfoCls,
+                "getSSID",
+                after = MethodHookHandler { inv ->
+                    if (shouldSpoofWifi(targetPackage)) inv.result = SANITIZED_SSID
+                }
+            )
+            backend.hookAllMethods(
+                wifiInfoCls,
+                "getMacAddress",
+                after = MethodHookHandler { inv ->
+                    if (shouldSpoofWifi(targetPackage)) inv.result = SANITIZED_BSSID
+                }
+            )
+            backend.hookAllMethods(
+                wifiInfoCls,
+                "getIpAddress",
+                after = MethodHookHandler { inv ->
+                    if (shouldSpoofWifi(targetPackage)) inv.result = 0
+                }
+            )
+            if (sdkIntProvider() >= Build.VERSION_CODES.TIRAMISU) {
+                backend.hookAllMethods(
+                    wifiInfoCls,
+                    "getApMldMacAddress",
+                    after = MethodHookHandler { inv ->
+                        if (shouldSpoofWifi(targetPackage)) inv.result = null
+                    }
+                )
+            }
+        }
+    }
+
+    fun clearForTest() {
+        installedLoaders.clear()
+        hookedConcreteCallbacks.clear()
+    }
 
     companion object {
+        const val SANITIZED_BSSID = "02:00:00:00:00:00"
+        const val SANITIZED_SSID = "<unknown ssid>"
 
-        @JvmStatic
-        fun initHooks(classLoader: ClassLoader) {
-            hookTelephony(classLoader)
-            hookWifi(classLoader)
+        val shared: NetworkAntiDetectHook = NetworkAntiDetectHook()
+
+        fun deriveDeterministicVirtualCell(latitude: Double, longitude: Double): Pair<Int, Int> {
+            val latInt = abs((latitude * 10000.0).toInt())
+            val lonInt = abs((longitude * 10000.0).toInt())
+            val lac = (latInt % 60_000) + 1000
+            val cid = (lonInt % 60_000) + 1000
+            return lac to cid
         }
 
-        private fun hookTelephony(classLoader: ClassLoader) {
-            // 1. TelephonyManager.getAllCellInfo -> 置空真实基站列表
-            try {
-                XposedHelpers.findAndHookMethod(
-                    TelephonyManager::class.java,
-                    "getAllCellInfo",
-                    object : XC_MethodHook() {
-                        override fun afterHookedMethod(param: MethodHookParam) {
-                            if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
-                            if (MockConfigManager.isCellInterceptionEnabled) {
-                                param.result = Collections.emptyList<CellInfo>()
-                            }
-                        }
-                    }
-                )
-            } catch (t: Throwable) {
-                XposedBridge.log("[MockLoc] Hook TelephonyManager.getAllCellInfo failed: ${t.message}")
-            }
-
-            // 2. TelephonyManager.getCellLocation -> 返回 null 阻断基站定位
-            try {
-                XposedHelpers.findAndHookMethod(
-                    TelephonyManager::class.java,
-                    "getCellLocation",
-                    object : XC_MethodHook() {
-                        override fun afterHookedMethod(param: MethodHookParam) {
-                            if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
-                            if (MockConfigManager.isCellInterceptionEnabled) {
-                                param.result = null
-                            }
-                        }
-                    }
-                )
-            } catch (t: Throwable) {
-                XposedBridge.log("[MockLoc] Hook TelephonyManager.getCellLocation failed: ${t.message}")
-            }
-
-            // 3. PhoneStateListener.onCellInfoChanged(List<CellInfo>)
-            try {
-                XposedHelpers.findAndHookMethod(
-                    PhoneStateListener::class.java,
-                    "onCellInfoChanged",
-                    List::class.java,
-                    object : XC_MethodHook() {
-                        override fun beforeHookedMethod(param: MethodHookParam) {
-                            if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
-                            if (MockConfigManager.isCellInterceptionEnabled) {
-                                param.args[0] = Collections.emptyList<CellInfo>()
-                            }
-                        }
-                    }
-                )
-            } catch (t: Throwable) {
-                XposedBridge.log("[MockLoc] Hook PhoneStateListener.onCellInfoChanged failed: ${t.message}")
-            }
-
-            // 4. API 31+ TelephonyCallback.CellInfoListener (若存在)
-            try {
-                val cellInfoListenerClass = Class.forName(
-                    "android.telephony.TelephonyCallback\$CellInfoListener",
-                    false,
-                    classLoader
-                )
-                XposedHelpers.findAndHookMethod(
-                    cellInfoListenerClass,
-                    "onCellInfoChanged",
-                    List::class.java,
-                    object : XC_MethodHook() {
-                        override fun beforeHookedMethod(param: MethodHookParam) {
-                            if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
-                            if (MockConfigManager.isCellInterceptionEnabled) {
-                                param.args[0] = Collections.emptyList<CellInfo>()
-                            }
-                        }
-                    }
-                )
-            } catch (_: Throwable) {}
+        @Suppress("DEPRECATION")
+        fun defaultSanitizedCellLocation(config: MockConfig): Any? {
+            return runCatching {
+                val (lac, cid) = deriveDeterministicVirtualCell(config.latitude, config.longitude)
+                GsmCellLocation().apply { setLacAndCid(lac, cid) }
+            }.getOrNull()
         }
 
-        private fun hookWifi(classLoader: ClassLoader) {
-            // 1. WifiManager.getScanResults -> 置空物理 AP 列表
-            try {
-                XposedHelpers.findAndHookMethod(
-                    WifiManager::class.java,
-                    "getScanResults",
-                    object : XC_MethodHook() {
-                        override fun afterHookedMethod(param: MethodHookParam) {
-                            if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
-                            if (MockConfigManager.isWifiInterceptionEnabled) {
-                                param.result = ArrayList<ScanResult>()
-                            }
-                        }
-                    }
-                )
-            } catch (t: Throwable) {
-                XposedBridge.log("[MockLoc] Hook WifiManager.getScanResults failed: ${t.message}")
+        fun defaultSanitizeWifiInfo(original: Any?, @Suppress("UNUSED_PARAMETER") config: MockConfig): Any? {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val built = runCatching {
+                    WifiInfo.Builder()
+                        .setBssid(SANITIZED_BSSID)
+                        .setSsid(ByteArray(0))
+                        .setRssi(-127)
+                        .setNetworkId(-1)
+                        .build()
+                }.getOrNull()
+                if (built != null) return built
             }
-
-            // 2. WifiManager.getConnectionInfo -> 抹除当前连接热点 BSSID 为 02:00:00:00:00:00
-            try {
-                XposedHelpers.findAndHookMethod(
-                    WifiManager::class.java,
-                    "getConnectionInfo",
-                    object : XC_MethodHook() {
-                        override fun afterHookedMethod(param: MethodHookParam) {
-                            if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
-                            if (MockConfigManager.isWifiInterceptionEnabled) {
-                                val info = param.result
-                                if (info != null) {
-                                    NetworkAntiDetectFilter.sanitizeWifiInfoBssid(info, true)
-                                }
-                            }
-                        }
-                    }
-                )
-            } catch (t: Throwable) {
-                XposedBridge.log("[MockLoc] Hook WifiManager.getConnectionInfo failed: ${t.message}")
-            }
-
-            // 3. WifiManager.startScan -> 抑制真实硬件广播扫描并直接返回 true
-            try {
-                XposedHelpers.findAndHookMethod(
-                    WifiManager::class.java,
-                    "startScan",
-                    object : XC_MethodHook() {
-                        override fun beforeHookedMethod(param: MethodHookParam) {
-                            if (!MockConfigManager.isMockEnabledForCurrentProcess()) return
-                            if (MockConfigManager.isWifiInterceptionEnabled) {
-                                param.result = true
-                            }
-                        }
-                    }
-                )
-            } catch (t: Throwable) {
-                XposedBridge.log("[MockLoc] Hook WifiManager.startScan failed: ${t.message}")
-            }
+            return original
         }
     }
 }

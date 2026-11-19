@@ -1,68 +1,80 @@
 package com.mockloc.domain.math
 
 import com.mockloc.domain.model.GeoPoint
-import kotlin.math.*
+import kotlin.math.PI
+import kotlin.math.asin
+import kotlin.math.atan2
+import kotlin.math.cos
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
-/**
- * 空间几何与球面距离计算工具类（基于 WGS84 椭球体平均球面模型）。
- * 纯 JVM 独立计算，无外部 SDK 依赖。
- */
 object SpatialMath {
-    /** WGS84 平均地球半径（单位：米） */
-    const val EARTH_RADIUS = 6371000.0
+    const val EARTH_RADIUS_METERS = 6_371_000.0
 
-    /**
-     * 使用 Haversine 公式计算两个地理坐标点之间的球面大圆距离（单位：米）。
-     *
-     * @param p1 起点
-     * @param p2 终点
-     * @return 两点间的距离（米）
-     */
     fun calculateHaversineDistance(p1: GeoPoint, p2: GeoPoint): Double {
-        val lat1Rad = Math.toRadians(p1.latitude)
-        val lat2Rad = Math.toRadians(p2.latitude)
-        val deltaLat = Math.toRadians(p2.latitude - p1.latitude)
-        val deltaLon = Math.toRadians(p2.longitude - p1.longitude)
-
-        val sinHalfDeltaLat = sin(deltaLat / 2.0)
-        val sinHalfDeltaLon = sin(deltaLon / 2.0)
-
-        val a = (sinHalfDeltaLat * sinHalfDeltaLat +
-                cos(lat1Rad) * cos(lat2Rad) * sinHalfDeltaLon * sinHalfDeltaLon).coerceIn(0.0, 1.0)
-        val c = 2.0 * atan2(sqrt(a), sqrt(1.0 - a))
-        return EARTH_RADIUS * c
+        return calculateHaversineDistance(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
     }
 
-    /**
-     * 计算从起点 p1 指向终点 p2 的大圆初始方位角（Initial Bearing）。
-     *
-     * @param p1 起点
-     * @param p2 终点
-     * @return 方位角，取值范围 [0.0, 360.0) 度，以正北为 0 度，顺时针增加
-     */
+    fun calculateHaversineDistance(
+        lat1: Double,
+        lon1: Double,
+        lat2: Double,
+        lon2: Double
+    ): Double {
+        if (!lat1.isFinite() || !lon1.isFinite() || !lat2.isFinite() || !lon2.isFinite()) {
+            return 0.0
+        }
+        val safeLat1 = GeoPoint.clampLatitude(lat1)
+        val safeLon1 = GeoPoint.normalizeLongitude(lon1)
+        val safeLat2 = GeoPoint.clampLatitude(lat2)
+        val safeLon2 = GeoPoint.normalizeLongitude(lon2)
+
+        val dLat = Math.toRadians(safeLat2 - safeLat1)
+        val dLon = Math.toRadians(safeLon2 - safeLon1)
+        val rLat1 = Math.toRadians(safeLat1)
+        val rLat2 = Math.toRadians(safeLat2)
+
+        val a = sin(dLat / 2.0).pow(2) +
+            cos(rLat1) * cos(rLat2) * sin(dLon / 2.0).pow(2)
+        val clampedA = a.coerceIn(0.0, 1.0)
+        val c = 2.0 * asin(sqrt(clampedA))
+        return EARTH_RADIUS_METERS * c
+    }
+
     fun calculateBearing(p1: GeoPoint, p2: GeoPoint): Float {
-        val lat1Rad = Math.toRadians(p1.latitude)
-        val lat2Rad = Math.toRadians(p2.latitude)
-        val deltaLon = Math.toRadians(p2.longitude - p1.longitude)
-
-        val y = sin(deltaLon) * cos(lat2Rad)
-        val x = cos(lat1Rad) * sin(lat2Rad) - sin(lat1Rad) * cos(lat2Rad) * cos(deltaLon)
-
-        val degrees = Math.toDegrees(atan2(y, x))
-        val normalized = (degrees + 360.0) % 360.0
-        return normalized.toFloat()
+        return calculateBearing(p1.latitude, p1.longitude, p2.latitude, p2.longitude)
     }
 
-    /**
-     * 在起点 p1 和终点 p2 之间进行球面大圆插值（Slerp）。
-     * 同时对海拔高度和定位精度进行线性插值。
-     *
-     * @param p1 起点坐标
-     * @param p2 终点坐标
-     * @param fraction 插值比例系数，取值通常在 [0.0, 1.0] 之间
-     * @return 插值计算后的地理坐标点
-     */
+    fun calculateBearing(
+        lat1: Double,
+        lon1: Double,
+        lat2: Double,
+        lon2: Double
+    ): Float {
+        if (!lat1.isFinite() || !lon1.isFinite() || !lat2.isFinite() || !lon2.isFinite()) {
+            return 0f
+        }
+        if (lat1 == lat2 && lon1 == lon2) {
+            return 0f
+        }
+        val rLat1 = Math.toRadians(GeoPoint.clampLatitude(lat1))
+        val rLat2 = Math.toRadians(GeoPoint.clampLatitude(lat2))
+        val dLon = Math.toRadians(
+            GeoPoint.normalizeLongitude(lon2) - GeoPoint.normalizeLongitude(lon1)
+        )
+
+        val y = sin(dLon) * cos(rLat2)
+        val x = cos(rLat1) * sin(rLat2) - sin(rLat1) * cos(rLat2) * cos(dLon)
+        if (x == 0.0 && y == 0.0) return 0f
+
+        val deg = Math.toDegrees(atan2(y, x))
+        val normalized = ((deg % 360.0) + 360.0) % 360.0
+        return if (normalized.isFinite()) normalized.toFloat() else 0f
+    }
+
     fun interpolateGreatCircle(p1: GeoPoint, p2: GeoPoint, fraction: Double): GeoPoint {
+        if (fraction.isNaN()) return p1
         if (fraction <= 0.0) return p1
         if (fraction >= 1.0) return p2
 
@@ -71,10 +83,33 @@ object SpatialMath {
         val lat2 = Math.toRadians(p2.latitude)
         val lon2 = Math.toRadians(p2.longitude)
 
-        val d = calculateHaversineDistance(p1, p2) / EARTH_RADIUS
-        if (d < 1e-9) return p1 // 两点重合，避免分母为 0
+        val dLat = lat2 - lat1
+        val dLon = lon2 - lon1
+        val h = (sin(dLat / 2.0).pow(2) +
+            cos(lat1) * cos(lat2) * sin(dLon / 2.0).pow(2)).coerceIn(0.0, 1.0)
+        val d = 2.0 * asin(sqrt(h))
+
+        val alt = p1.altitude + (p2.altitude - p1.altitude) * fraction
+        val acc = (p1.accuracy + (p2.accuracy - p1.accuracy) * fraction).toFloat()
 
         val sinD = sin(d)
+        if (d < 1e-12 || kotlin.math.abs(sinD) < 1e-9) {
+            // 重合点或对跖点：退化为安全的经纬度线性插值（防除零与 NaN）
+            var deltaLon = p2.longitude - p1.longitude
+            if (deltaLon > 180.0) deltaLon -= 360.0
+            if (deltaLon < -180.0) deltaLon += 360.0
+            val outLat = p1.latitude + (p2.latitude - p1.latitude) * fraction
+            val outLon = p1.longitude + deltaLon * fraction
+            return GeoPoint.createSafe(
+                latitude = outLat,
+                longitude = outLon,
+                altitude = alt,
+                accuracy = acc,
+                timestamp = p1.timestamp,
+                normalizeLon = true
+            )
+        }
+
         val a = sin((1.0 - fraction) * d) / sinD
         val b = sin(fraction * d) / sinD
 
@@ -82,19 +117,41 @@ object SpatialMath {
         val y = a * cos(lat1) * sin(lon1) + b * cos(lat2) * sin(lon2)
         val z = a * sin(lat1) + b * sin(lat2)
 
-        val lat = atan2(z, sqrt(x * x + y * y))
-        val lon = atan2(y, x)
+        val outLat = Math.toDegrees(atan2(z, sqrt(x * x + y * y)))
+        val outLon = Math.toDegrees(atan2(y, x))
 
-        val alt = p1.altitude + (p2.altitude - p1.altitude) * fraction
-        val acc = (p1.accuracy + (p2.accuracy - p1.accuracy) * fraction).toFloat()
-        val time = (p1.timestamp + ((p2.timestamp - p1.timestamp) * fraction).toLong())
-
-        return GeoPoint(
-            latitude = Math.toDegrees(lat),
-            longitude = Math.toDegrees(lon),
+        return GeoPoint.createSafe(
+            latitude = outLat,
+            longitude = outLon,
             altitude = alt,
             accuracy = acc,
-            timestamp = time
+            timestamp = p1.timestamp,
+            fallbackLatitude = p1.latitude,
+            fallbackLongitude = p1.longitude,
+            normalizeLon = true
+        )
+    }
+
+    fun offsetByMeters(point: GeoPoint, northMeters: Double, eastMeters: Double): GeoPoint {
+        if (!northMeters.isFinite() || !eastMeters.isFinite()) return point
+        if (northMeters == 0.0 && eastMeters == 0.0) return point
+
+        val dLatDeg = (northMeters / EARTH_RADIUS_METERS) * (180.0 / PI)
+        val newLat = GeoPoint.clampLatitude(point.latitude + dLatDeg, point.latitude)
+
+        val cosLat = cos(Math.toRadians(newLat)).coerceAtLeast(1e-6)
+        val dLonDeg = (eastMeters / (EARTH_RADIUS_METERS * cosLat)) * (180.0 / PI)
+        val newLon = GeoPoint.normalizeLongitude(point.longitude + dLonDeg, point.longitude)
+
+        return GeoPoint.createSafe(
+            latitude = newLat,
+            longitude = newLon,
+            altitude = point.altitude,
+            accuracy = point.accuracy,
+            timestamp = point.timestamp,
+            fallbackLatitude = point.latitude,
+            fallbackLongitude = point.longitude,
+            normalizeLon = true
         )
     }
 }

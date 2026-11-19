@@ -1,41 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Brand Primary (Modern Tech Indigo / Blue) -->
-    <color name="primary">#2563EB</color>
-    <color name="primary_dark">#1D4ED8</color>
-    <color name="primary_light">#DBEAFE</color>
-    <color name="primary_variant">#1E40AF</color>
+    <!-- Material 3 浅色模式主色板（深海导航蓝 + 生态青） -->
+    <color name="md_theme_primary">#1565C0</color>
+    <color name="md_theme_onPrimary">#FFFFFF</color>
+    <color name="md_theme_primaryContainer">#D3E4FF</color>
+    <color name="md_theme_onPrimaryContainer">#001C38</color>
 
-    <!-- Brand Secondary / Accent -->
-    <color name="secondary">#0D9488</color>
-    <color name="secondary_dark">#0F766E</color>
-    <color name="secondary_light">#CCFBF1</color>
+    <color name="md_theme_secondary">#00796B</color>
+    <color name="md_theme_onSecondary">#FFFFFF</color>
+    <color name="md_theme_secondaryContainer">#B2DFDB</color>
+    <color name="md_theme_onSecondaryContainer">#00201C</color>
 
-    <!-- Background and Surface -->
-    <color name="background">#F8FAFC</color>
-    <color name="surface">#FFFFFF</color>
-    <color name="card_background">#FFFFFF</color>
-    <color name="divider">#E2E8F0</color>
+    <color name="md_theme_tertiary">#5C6BC0</color>
+    <color name="md_theme_onTertiary">#FFFFFF</color>
+    <color name="md_theme_tertiaryContainer">#E0E3FF</color>
+    <color name="md_theme_onTertiaryContainer">#151D4A</color>
 
-    <!-- Text Colors -->
-    <color name="text_primary">#0F172A</color>
-    <color name="text_secondary">#475569</color>
-    <color name="text_hint">#94A3B8</color>
-    <color name="text_on_primary">#FFFFFF</color>
+    <color name="md_theme_error">#BA1A1A</color>
+    <color name="md_theme_onError">#FFFFFF</color>
+    <color name="md_theme_errorContainer">#FFDAD6</color>
+    <color name="md_theme_onErrorContainer">#410002</color>
 
-    <!-- Status Colors -->
-    <color name="status_active">#059669</color>
-    <color name="status_active_bg">#ECFDF5</color>
-    <color name="status_inactive">#DC2626</color>
-    <color name="status_inactive_bg">#FEF2F2</color>
-    <color name="status_warning">#D97706</color>
-    <color name="status_warning_bg">#FFFBEB</color>
+    <color name="md_theme_background">#F7F9FC</color>
+    <color name="md_theme_onBackground">#191C20</color>
+    <color name="md_theme_surface">#F7F9FC</color>
+    <color name="md_theme_onSurface">#191C20</color>
+    <color name="md_theme_surfaceVariant">#E0E6F0</color>
+    <color name="md_theme_onSurfaceVariant">#43474E</color>
+    <color name="md_theme_surfaceContainerLowest">#FFFFFF</color>
+    <color name="md_theme_surfaceContainerLow">#F1F4F9</color>
+    <color name="md_theme_surfaceContainer">#EBEFF6</color>
+    <color name="md_theme_surfaceContainerHigh">#E5EAF2</color>
+    <color name="md_theme_outline">#686C74</color>
+    <color name="md_theme_outlineVariant">#C3C7CF</color>
 
-    <!-- Mode Accent -->
-    <color name="mode_single_point">#2563EB</color>
-    <color name="mode_cruise">#EA580C</color>
+    <!-- 业务语义色 -->
+    <color name="status_success">#146C31</color>
+    <color name="status_success_container">#DCF5E3</color>
+    <color name="status_warning">#9A4700</color>
+    <color name="status_warning_container">#FFEBD6</color>
+    <color name="status_error">#BA1A1A</color>
+    <color name="status_error_container">#FFDAD6</color>
+    <color name="status_info">#0D55A8</color>
+    <color name="status_info_container">#D3E4FF</color>
+    <color name="status_neutral">#5F6368</color>
+    <color name="status_neutral_container">#E8EAED</color>
 
-    <!-- Map Elements -->
-    <color name="route_polyline">#2563EB</color>
-    <color name="route_polyline_outline">#1E40AF</color>
+    <color name="map_route_line">#1565C0</color>
+    <color name="map_marker_start">#2E7D32</color>
+    <color name="map_marker_end">#C62828</color>
+    <color name="map_marker_waypoint">#1565C0</color>
+    <color name="scrim_surface">#CCFFFFFF</color>
 </resources>

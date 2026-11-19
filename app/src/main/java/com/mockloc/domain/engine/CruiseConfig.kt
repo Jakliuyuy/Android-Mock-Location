@@ -1,23 +1,22 @@
 package com.mockloc.domain.engine
 
-/**
- * 路线巡航引擎配置项。
- *
- * @property baseSpeedMps 基础巡航速度（米/秒），必须非负
- * @property loopMode 循环模式，默认为单向 ONE_WAY
- * @property enableJitter 是否启用 AR-1 速度抖动仿真，默认开启
- * @property enableMicroDrift 是否启用 OU 均值回归位置微漂移仿真，默认开启
- * @property maxDriftRadiusMeters 微漂移最大半径约束（米），默认 4.0 米
- */
 data class CruiseConfig(
-    val baseSpeedMps: Float,
+    val speedMps: Double = SpeedPreset.WALK.speedMps,
     val loopMode: LoopMode = LoopMode.ONE_WAY,
-    val enableJitter: Boolean = true,
+    val enableSpeedNoise: Boolean = true,
+    val speedNoiseRatio: Double = 0.08,
     val enableMicroDrift: Boolean = true,
-    val maxDriftRadiusMeters: Double = 4.0
+    val maxDriftRadiusMeters: Double = 1.5
 ) {
     init {
-        require(baseSpeedMps >= 0f) { "baseSpeedMps must be non-negative, was: $baseSpeedMps" }
-        require(maxDriftRadiusMeters >= 0.0) { "maxDriftRadiusMeters must be non-negative, was: $maxDriftRadiusMeters" }
+        require(speedMps.isFinite() && speedMps >= 0.0) {
+            "speedMps must be finite and >= 0, was: $speedMps"
+        }
+        require(speedNoiseRatio.isFinite() && speedNoiseRatio in 0.0..1.0) {
+            "speedNoiseRatio must be finite and in [0.0, 1.0], was: $speedNoiseRatio"
+        }
+        require(maxDriftRadiusMeters.isFinite() && maxDriftRadiusMeters >= 0.0) {
+            "maxDriftRadiusMeters must be finite and >= 0, was: $maxDriftRadiusMeters"
+        }
     }
 }

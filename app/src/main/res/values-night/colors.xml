@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3 深色模式主色板 -->
+    <color name="md_theme_primary">#A4C9FF</color>
+    <color name="md_theme_onPrimary">#00315D</color>
+    <color name="md_theme_primaryContainer">#004884</color>
+    <color name="md_theme_onPrimaryContainer">#D3E4FF</color>
+
+    <color name="md_theme_secondary">#80CBC4</color>
+    <color name="md_theme_onSecondary">#003731</color>
+    <color name="md_theme_secondaryContainer">#005048</color>
+    <color name="md_theme_onSecondaryContainer">#B2DFDB</color>
+
+    <color name="md_theme_tertiary">#BCC2FF</color>
+    <color name="md_theme_onTertiary">#242C61</color>
+    <color name="md_theme_tertiaryContainer">#3B4379</color>
+    <color name="md_theme_onTertiaryContainer">#E0E3FF</color>
+
+    <color name="md_theme_error">#FFB4AB</color>
+    <color name="md_theme_onError">#690005</color>
+    <color name="md_theme_errorContainer">#93000A</color>
+    <color name="md_theme_onErrorContainer">#FFDAD6</color>
+
+    <color name="md_theme_background">#111418</color>
+    <color name="md_theme_onBackground">#E1E2E8</color>
+    <color name="md_theme_surface">#111418</color>
+    <color name="md_theme_onSurface">#E1E2E8</color>
+    <color name="md_theme_surfaceVariant">#43474E</color>
+    <color name="md_theme_onSurfaceVariant">#C3C7CF</color>
+    <color name="md_theme_surfaceContainerLowest">#0C0E12</color>
+    <color name="md_theme_surfaceContainerLow">#191C20</color>
+    <color name="md_theme_surfaceContainer">#1D2024</color>
+    <color name="md_theme_surfaceContainerHigh">#282A2F</color>
+    <color name="md_theme_outline">#8D9199</color>
+    <color name="md_theme_outlineVariant">#43474E</color>
+
+    <!-- 深色业务语义色 -->
+    <color name="status_success">#6DD58C</color>
+    <color name="status_success_container">#144724</color>
+    <color name="status_warning">#FFB74D</color>
+    <color name="status_warning_container">#522A00</color>
+    <color name="status_error">#FFB4AB</color>
+    <color name="status_error_container">#690005</color>
+    <color name="status_info">#A4C9FF</color>
+    <color name="status_info_container">#004884</color>
+    <color name="status_neutral">#B0B5BD</color>
+    <color name="status_neutral_container">#2C3036</color>
+
+    <color name="map_route_line">#64B5F6</color>
+    <color name="map_marker_start">#66BB6A</color>
+    <color name="map_marker_end">#EF5350</color>
+    <color name="map_marker_waypoint">#64B5F6</color>
+    <color name="scrim_surface">#CC191C20</color>
+</resources>

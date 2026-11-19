@@ -1,16 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- LSPosed 官方推荐作用域列表 (xposedscope) -->
+    <!-- LSPosed 官方推荐作用域列表 (xposedscope)：与 RecommendedScopeRepository.getXposedScopeArrayPackages() 保持同步 -->
+    <!-- 注意：系统框架 (android) 仅用于特殊系统增强说明，不纳入多段包名 xposed_scope 资源数组 -->
     <string-array name="xposed_scope">
         <item>com.mockloc</item>
         <item>com.autonavi.minimap</item>
         <item>com.baidu.BaiduMap</item>
         <item>com.tencent.map</item>
+        <item>com.autonavi.amapauto</item>
         <item>com.tencent.mm</item>
-        <item>com.alibaba.android.rimet</item>
         <item>com.tencent.wework</item>
+        <item>com.alibaba.android.rimet</item>
         <item>com.ss.android.lark</item>
         <item>com.sankuai.meituan</item>
         <item>com.dianping.v1</item>
+        <item>com.sdu.didi.psnger</item>
+        <item>me.ele</item>
+        <item>com.xingin.xhs</item>
+        <item>com.ss.android.ugc.aweme</item>
     </string-array>
 </resources>

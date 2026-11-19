@@ -2,152 +2,123 @@ package com.mockloc.domain.engine
 
 import com.mockloc.domain.math.SpatialMath
 import com.mockloc.domain.model.GeoPoint
-import java.util.Random
-import kotlin.math.*
+import kotlin.math.exp
+import kotlin.math.hypot
+import kotlin.math.sqrt
+import kotlin.random.Random
 
-/**
- * 运动仿真器：提供基于物理与统计模型的速度噪声抖动（AR-1）和位置微漂移（Ornstein-Uhlenbeck 均值回归）。
- *
- * @param seed 可选的随机数种子，传入非空值可确保仿真序列的确定性与可重复性（常用于单元测试）
- * @param random 随机数发生器实例
- */
 class MotionSimulator(
-    val seed: Long? = null,
-    private val random: Random = seed?.let { Random(it) } ?: Random()
+    private val random: Random = Random.Default
 ) {
-    // AR-1 速度抖动内部状态：上一时刻的速度
-    private var previousSpeed: Float? = null
+    private var speedResidualMps: Double = 0.0
+    private var driftNorthMeters: Double = 0.0
+    private var driftEastMeters: Double = 0.0
 
-    // Ornstein-Uhlenbeck 微漂移切平面位移内部状态（单位：米，x 为正东向，y 为正北向）
-    private var driftX: Double = 0.0
-    private var driftY: Double = 0.0
-
-    /**
-     * 计算下一时刻的瞬时速度。
-     * 采用一阶自回归模型 AR-1：v_t = alpha * v_{t-1} + (1 - alpha) * v_base + epsilon
-     * 并将瞬时速度严格限制在 [0.5 * v_base, 1.5 * v_base] 的物理合理区间内。
-     *
-     * @param baseSpeedMps 基础巡航速度（米/秒）
-     * @param enableJitter 是否启用抖动，若为 false 则直接返回 baseSpeedMps
-     * @return 叠加抖动后的瞬时速度（米/秒）
-     */
-    @Synchronized
-    fun nextSpeed(baseSpeedMps: Float, enableJitter: Boolean = true): Float {
-        if (!enableJitter || baseSpeedMps <= 0f) {
-            previousSpeed = baseSpeedMps
+    fun nextSpeed(
+        baseSpeedMps: Double,
+        noiseRatio: Double = 0.08,
+        enableNoise: Boolean = true,
+        deltaSeconds: Double = 1.0
+    ): Double {
+        if (!baseSpeedMps.isFinite() || baseSpeedMps <= 0.0) {
+            speedResidualMps = 0.0
+            return 0.0
+        }
+        if (!enableNoise || !noiseRatio.isFinite() || noiseRatio <= 0.0) {
+            speedResidualMps = 0.0
             return baseSpeedMps
         }
-
-        val alpha = 0.85f // AR-1 自回归系数（平滑衰减因子）
-        val prev = previousSpeed ?: baseSpeedMps
-        val sigma = 0.08f * baseSpeedMps // 噪声标准差，与基准速度成比例
-        val noise = (random.nextGaussian() * sigma).toFloat()
-
-        val candidate = alpha * prev + (1f - alpha) * baseSpeedMps + noise
-        val minSpeed = 0.5f * baseSpeedMps
-        val maxSpeed = 1.5f * baseSpeedMps
-        val clamped = candidate.coerceIn(minSpeed, maxSpeed)
-
-        previousSpeed = clamped
-        return clamped
-    }
-
-    /**
-     * 对给定的基准地理坐标施加 Ornstein-Uhlenbeck (OU) 均值回归位置微小漂移。
-     * dx = -theta * x * dt + sigma * dW_x
-     * dy = -theta * y * dt + sigma * dW_y
-     * 漂移向量长度严格受限在 maxDriftRadiusMeters 之内。
-     *
-     * @param point 基础地理坐标点
-     * @param deltaSeconds 步进时间间隔（秒）
-     * @param enableMicroDrift 是否启用微漂移
-     * @param maxDriftRadiusMeters 允许的最大漂移半径（米，默认 4.0）
-     * @return 叠加微漂移后的新地理坐标点
-     */
-    @Synchronized
-    fun applyMicroDrift(
-        point: GeoPoint,
-        deltaSeconds: Double,
-        enableMicroDrift: Boolean = true,
-        maxDriftRadiusMeters: Double = 4.0
-    ): GeoPoint {
-        if (!enableMicroDrift || maxDriftRadiusMeters <= 0.0 || deltaSeconds <= 0.0) {
-            return point
+        val safeRatio = noiseRatio.coerceIn(0.0, 1.0)
+        val maxDelta = baseSpeedMps * safeRatio
+        if (!deltaSeconds.isFinite() || deltaSeconds <= 0.0) {
+            return (baseSpeedMps + speedResidualMps).coerceIn(
+                (baseSpeedMps - maxDelta).coerceAtLeast(0.0),
+                baseSpeedMps + maxDelta
+            )
         }
 
-        // OU 参数：theta (均值回归速率), sigma (波动率)
-        val theta = 0.35
-        val sigma = 1.0
-        val dt = deltaSeconds.coerceAtLeast(0.0)
-
-        // 精确解衰减系数与扩散噪声方差
-        val decay = exp(-theta * dt)
-        val variance = if (theta > 1e-6) {
-            (sigma * sigma / (2.0 * theta)) * (1.0 - exp(-2.0 * theta * dt))
-        } else {
-            sigma * sigma * dt
-        }
-        val stdDev = sqrt(variance.coerceAtLeast(0.0))
-
-        val zX = random.nextGaussian()
-        val zY = random.nextGaussian()
-
-        var newX = driftX * decay + stdDev * zX
-        var newY = driftY * decay + stdDev * zY
-
-        // 严格圆盘半径裁剪
-        val radius = sqrt(newX * newX + newY * newY)
-        if (radius > maxDriftRadiusMeters) {
-            val scale = maxDriftRadiusMeters / radius
-            newX *= scale
-            newY *= scale
-        }
-
-        driftX = newX
-        driftY = newY
-
-        // 将切平面位移 (米) 映射为 WGS84 经纬度增量
-        val earthRadius = SpatialMath.EARTH_RADIUS
-        val deltaLatDeg = (driftY / earthRadius) * (180.0 / Math.PI)
-
-        val latRad = Math.toRadians(point.latitude)
-        val cosLat = max(abs(cos(latRad)), 1e-6)
-        val deltaLonDeg = (driftX / (earthRadius * cosLat)) * (180.0 / Math.PI)
-
-        val finalLat = (point.latitude + deltaLatDeg).coerceIn(-90.0, 90.0)
-        val finalLon = normalizeLongitude(point.longitude + deltaLonDeg)
-
-        return point.copy(
-            latitude = finalLat,
-            longitude = finalLon
+        // AR-1 相关时间常数为 4 秒
+        val tau = 4.0
+        val phi = exp(-deltaSeconds / tau)
+        val sigma = maxDelta * 0.45 * sqrt((1.0 - phi * phi).coerceAtLeast(0.0))
+        val gaussian = nextGaussian()
+        speedResidualMps = (phi * speedResidualMps + sigma * gaussian).coerceIn(-maxDelta, maxDelta)
+        val result = (baseSpeedMps + speedResidualMps).coerceIn(
+            (baseSpeedMps - maxDelta).coerceAtLeast(0.0),
+            baseSpeedMps + maxDelta
         )
+        return if (result.isFinite()) result else baseSpeedMps
     }
 
-    /**
-     * 获取当前切平面位移向量 (x, y)（米），便于测试和调试。
-     */
-    @Synchronized
-    fun getCurrentDriftOffset(): Pair<Double, Double> {
-        return Pair(driftX, driftY)
-    }
-
-    /**
-     * 重置运动仿真器内部状态（清空历史速度和累积漂移量）。
-     */
-    @Synchronized
-    fun reset() {
-        previousSpeed = null
-        driftX = 0.0
-        driftY = 0.0
-        if (seed != null) {
-            random.setSeed(seed)
+    fun applyMicroDrift(
+        basePoint: GeoPoint,
+        maxDriftRadiusMeters: Double,
+        enableDrift: Boolean,
+        deltaSeconds: Double = 1.0
+    ): GeoPoint {
+        if (!enableDrift ||
+            !maxDriftRadiusMeters.isFinite() ||
+            maxDriftRadiusMeters <= 0.0 ||
+            !deltaSeconds.isFinite() ||
+            deltaSeconds <= 0.0
+        ) {
+            return basePoint
         }
+
+        // Ornstein-Uhlenbeck (OU) 微漂移过程
+        val theta = 0.35
+        val decay = exp(-theta * deltaSeconds)
+        val sigma = maxDriftRadiusMeters * 0.35 * sqrt((1.0 - decay * decay).coerceAtLeast(0.0))
+
+        val nextNorth = decay * driftNorthMeters + sigma * nextGaussian()
+        val nextEast = decay * driftEastMeters + sigma * nextGaussian()
+
+        if (!nextNorth.isFinite() || !nextEast.isFinite()) {
+            return basePoint
+        }
+
+        val radius = hypot(nextNorth, nextEast)
+        if (radius > maxDriftRadiusMeters && radius > 0.0) {
+            val scale = maxDriftRadiusMeters / radius
+            driftNorthMeters = nextNorth * scale
+            driftEastMeters = nextEast * scale
+        } else {
+            driftNorthMeters = nextNorth
+            driftEastMeters = nextEast
+        }
+
+        var candidate = SpatialMath.offsetByMeters(basePoint, driftNorthMeters, driftEastMeters)
+        // 高纬度极区经线急速收敛或浮点舍入可能使球面距离微幅溢出 maxDriftRadiusMeters，按实际 Haversine 距离比例回缩
+        for (attempt in 0 until 4) {
+            val actualDist = SpatialMath.calculateHaversineDistance(basePoint, candidate)
+            if (actualDist <= maxDriftRadiusMeters || actualDist <= 0.0) {
+                return candidate
+            }
+            val shrink = (maxDriftRadiusMeters * 0.999999) / actualDist
+            driftNorthMeters *= shrink
+            driftEastMeters *= shrink
+            candidate = SpatialMath.offsetByMeters(basePoint, driftNorthMeters, driftEastMeters)
+        }
+
+        if (SpatialMath.calculateHaversineDistance(basePoint, candidate) > maxDriftRadiusMeters) {
+            driftNorthMeters = 0.0
+            driftEastMeters = 0.0
+            return basePoint
+        }
+        return candidate
     }
 
-    private fun normalizeLongitude(lon: Double): Double {
-        var result = lon
-        while (result > 180.0) result -= 360.0
-        while (result < -180.0) result += 360.0
-        return result
+    fun reset() {
+        speedResidualMps = 0.0
+        driftNorthMeters = 0.0
+        driftEastMeters = 0.0
+    }
+
+    private fun nextGaussian(): Double {
+        // Box-Muller 变换（防 u1 == 0 产生 -Infinity）
+        val u1 = random.nextDouble().coerceIn(1e-12, 1.0 - 1e-12)
+        val u2 = random.nextDouble()
+        val z = sqrt(-2.0 * kotlin.math.ln(u1)) * kotlin.math.cos(2.0 * Math.PI * u2)
+        return if (z.isFinite()) z else 0.0
     }
 }

@@ -1,136 +1,162 @@
 package com.mockloc.hook
 
-import android.app.Application
-import android.content.BroadcastReceiver
-import android.content.Context
-import android.content.Intent
-import android.content.IntentFilter
-import android.os.Build
-import com.mockloc.data.MockConfigManager
-import com.mockloc.ipc.LocationConfigProvider
+import android.location.Location
+import com.mockloc.hook.cleaner.MockLocationCleaner
+import com.mockloc.root.EnvironmentDetector
 import de.robv.android.xposed.IXposedHookLoadPackage
-import de.robv.android.xposed.XC_MethodHook
-import de.robv.android.xposed.XC_MethodReplacement
 import de.robv.android.xposed.XposedBridge
-import de.robv.android.xposed.XposedHelpers
 import de.robv.android.xposed.callbacks.XC_LoadPackage
 
-/**
- * Xposed / LSPosed 模块主入口点。
- * 实现 IXposedHookLoadPackage，在目标进程被加载时注入定位拦截与防检测 Hook，
- * 并通过 ContentProvider + 动态广播建立跨进程配置与巡航坐标同步机制。
- */
 class XposedInit : IXposedHookLoadPackage {
 
-    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam) {
-        val packageName = lpparam.packageName ?: return
+    override fun handleLoadPackage(lpparam: XC_LoadPackage.LoadPackageParam?) {
+        val lp = lpparam ?: return
+        val pkg = lp.packageName ?: return
+        val cl = lp.classLoader
 
-        // 1. 如果是自身主控应用进程：Hook 激活检测锚点方法使 UI 显示“已激活”
-        if (packageName == "com.mockloc") {
-            try {
-                XposedHelpers.findAndHookMethod(
-                    "com.mockloc.root.EnvironmentDetector",
-                    lpparam.classLoader,
-                    "isModuleActive",
-                    XC_MethodReplacement.returnConstant(true)
-                )
-                XposedBridge.log("[MockLoc] Successfully activated: hooked isModuleActive() for self package")
-            } catch (t: Throwable) {
-                XposedBridge.log("[MockLoc] Hook self isModuleActive failed: ${t.message}")
+        handlePackageInternal(
+            packageName = pkg,
+            classLoader = cl,
+            backend = XposedHookBackend,
+            configStore = HookConfigStore.shared,
+            locationHook = LocationHook.shared,
+            networkHook = NetworkAntiDetectHook.shared,
+            thirdPartyHook = ThirdPartyLbsSdkHook.shared,
+            classLoaderHelper = ClassLoaderHookHelper.shared,
+            xposedVersionProvider = ::safeGetXposedVersion
+        )
+    }
+
+    internal fun handlePackageInternal(
+        packageName: String,
+        classLoader: ClassLoader?,
+        backend: HookBackend,
+        configStore: HookConfigStore,
+        locationHook: LocationHook,
+        networkHook: NetworkAntiDetectHook,
+        thirdPartyHook: ThirdPartyLbsSdkHook,
+        classLoaderHelper: ClassLoaderHookHelper,
+        xposedVersionProvider: () -> Int
+    ) {
+        if (packageName == HookConfigStore.MOCKLOC_PACKAGE) {
+            installSelfCheckHooks(classLoader, backend, xposedVersionProvider)
+            return
+        }
+
+        if (packageName == SYSTEM_SERVER_PACKAGE) {
+            installSystemServerSafeHooks(classLoader, backend, configStore)
+            return
+        }
+
+        // 预热 L1 XSharedPreferences 配置（非阻塞且无一次性锁死标志）
+        runCatching { configStore.getConfig(null, forceRefresh = true) }
+
+        LocationHook.currentTargetPackage = packageName
+
+        runCatching {
+            locationHook.installSystemHooks(classLoader, packageName)
+        }
+        runCatching {
+            MockLocationCleaner.installHooks(classLoader, backend) {
+                configStore.getConfig(LocationHook.currentAppContext).isEnabledForPackage(packageName)
             }
-            return
+        }
+        runCatching {
+            networkHook.install(classLoader, packageName)
+        }
+        runCatching {
+            thirdPartyHook.installForClassLoader(classLoader, packageName)
         }
 
-        // 2. 过滤系统基础框架与状态栏（系统框架建议走应用级拦截以保安全）
-        if (packageName == "android" || packageName == "com.android.systemui") {
-            XposedBridge.log("[MockLoc] System package $packageName bypassed (app-level isolation)")
-            return
-        }
-
-        MockConfigManager.currentProcessPackage = packageName
-        XposedBridge.log("[MockLoc] Injecting hooks into target package: $packageName")
-
-        // 1. 初始化定位核心拦截引擎与监听器代理
-        LocationHook.initHooks(lpparam.classLoader)
-
-        // 2. 初始化基站与 WiFi 反检测拦截引擎
-        NetworkAntiDetectHook.initHooks(lpparam.classLoader)
-
-        // 3. 初始化第三方主流地图与定位 SDK 拦截引擎 (微信/腾讯定位、高德定位、百度定位)
-        ThirdPartyLbsSdkHook.initHooks(lpparam.classLoader)
-
-        // 3. 挂钩 Application.attachBaseContext 获取 Context，在最早生命周期拉取跨进程配置
-        try {
-            XposedHelpers.findAndHookMethod(
-                Application::class.java,
-                "attachBaseContext",
-                Context::class.java,
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val ctx = (param.args[0] as? Context) ?: (param.thisObject as? Context) ?: return
-                        initIpcSync(ctx, packageName)
+        classLoaderHelper.install(
+            initialClassLoader = classLoader,
+            onContextReady = { ctx ->
+                LocationHook.currentAppContext = ctx.applicationContext ?: ctx
+                runCatching {
+                    configStore.registerConfigReceiverOnce(ctx) { updated ->
+                        locationHook.onConfigChanged(updated, packageName)
                     }
                 }
-            )
-        } catch (t: Throwable) {
-            XposedBridge.log("[MockLoc] Hook Application.attachBaseContext failed: ${t.message}")
-        }
-
-        // 4. 挂钩 Application.onCreate 获取 Context 作为生命周期双重保障
-        try {
-            XposedHelpers.findAndHookMethod(
-                Application::class.java,
-                "onCreate",
-                object : XC_MethodHook() {
-                    override fun afterHookedMethod(param: MethodHookParam) {
-                        val app = param.thisObject as? Application ?: return
-                        initIpcSync(app, packageName)
-                    }
+                runCatching {
+                    configStore.getConfig(ctx, forceRefresh = false)
                 }
-            )
-        } catch (t: Throwable) {
-            XposedBridge.log("[MockLoc] Hook Application.onCreate failed: ${t.message}")
+            },
+            onClassLoaderReady = { newCl ->
+                runCatching {
+                    thirdPartyHook.installForClassLoader(newCl, packageName)
+                }
+                runCatching {
+                    networkHook.install(newCl, packageName)
+                }
+            }
+        )
+    }
+
+    private fun installSelfCheckHooks(
+        classLoader: ClassLoader?,
+        backend: HookBackend,
+        xposedVersionProvider: () -> Int
+    ) {
+        runCatching {
+            val detectorCls = backend.findClassIfExists(
+                EnvironmentDetector::class.java.name,
+                classLoader
+            ) ?: EnvironmentDetector::class.java
+
+            val apiVersion = xposedVersionProvider()
+            backend.replaceMethod(detectorCls, "isModuleActive") { true }
+            backend.replaceMethod(detectorCls, "getXposedApiVersion") { apiVersion }
         }
     }
 
-    private val isReceiverRegistered = java.util.concurrent.atomic.AtomicBoolean(false)
-
     /**
-     * 建立跨进程配置拉取与实时广播同步管道
+     * system_server (android) 保护分支：
+     * 绝不阻塞 android.fg、绝不注册广播接收器、绝不启动脉冲调度线程、绝不执行同步 IPC。
+     * 仅尝试对系统定位服务分发的 Location 做轻量可选清理；未授权或找不到内部类时静默安全降级。
      */
-    private fun initIpcSync(context: Context, packageName: String) {
-        // 冷启动从 ContentProvider 拉取当前配置
+    internal fun installSystemServerSafeHooks(
+        classLoader: ClassLoader?,
+        backend: HookBackend,
+        configStore: HookConfigStore
+    ) {
         try {
-            val bundle = LocationConfigProvider.fetchConfig(context, packageName)
-            if (bundle != null) {
-                MockConfigManager.updateFromBundle(bundle)
-                XposedBridge.log("[MockLoc] Initial config synced for $packageName, enabled=${MockConfigManager.isMockEnabled}")
-            }
-        } catch (t: Throwable) {
-            XposedBridge.log("[MockLoc] Initial config sync failed: ${t.message}")
-        }
+            // 仅在入口做一次非阻塞、严格 try-catch 的 L1 冷加载，绝不阻塞 android.fg 或注册广播/启动线程
+            runCatching { configStore.reloadFromL1(forceReload = true) }
 
-        // 注册动态广播接收器以实现实时巡航与坐标同步 (仅注册一次)
-        if (isReceiverRegistered.compareAndSet(false, true)) {
-            try {
-                val filter = IntentFilter(MockConfigManager.ACTION_CONFIG_CHANGED)
-                val receiver = object : BroadcastReceiver() {
-                    override fun onReceive(ctx: Context?, intent: Intent?) {
-                        if (intent?.action != MockConfigManager.ACTION_CONFIG_CHANGED) return
-                        val extras = intent.extras ?: return
-                        MockConfigManager.updateFromBundle(extras)
+            val lmsCls = backend.findClassIfExists(
+                "com.android.server.location.LocationManagerService",
+                classLoader
+            ) ?: return
+
+            backend.hookAllMethods(
+                lmsCls,
+                "getLastLocation",
+                after = MethodHookHandler { inv ->
+                    val cfg = configStore.peekCurrentConfig()
+                    if (!cfg.enabled) return@MethodHookHandler
+                    val pkgArg = inv.args.firstOrNull { it is String } as? String
+                    if (pkgArg != null && cfg.isEnabledForPackage(pkgArg)) {
+                        val loc = inv.result as? Location ?: return@MethodHookHandler
+                        MockLocationCleaner.cleanLocation(loc)
                     }
                 }
-                if (Build.VERSION.SDK_INT >= 33) {
-                    context.registerReceiver(receiver, filter, Context.RECEIVER_EXPORTED)
-                } else {
-                    context.registerReceiver(receiver, filter)
-                }
-                XposedBridge.log("[MockLoc] Dynamic broadcast receiver registered for $packageName")
-            } catch (t: Throwable) {
-                isReceiverRegistered.set(false)
-                XposedBridge.log("[MockLoc] Register broadcast receiver failed: ${t.message}")
-            }
+            )
+        } catch (t: Throwable) {
+            backend.log("system_server optional hook skipped safely", t)
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun safeGetXposedVersion(): Int {
+        return try {
+            val v = XposedBridge.getXposedVersion()
+            if (v > 0) v else XposedBridge.XPOSED_BRIDGE_VERSION
+        } catch (_: Throwable) {
+            93
+        }
+    }
+
+    companion object {
+        const val SYSTEM_SERVER_PACKAGE = "android"
     }
 }

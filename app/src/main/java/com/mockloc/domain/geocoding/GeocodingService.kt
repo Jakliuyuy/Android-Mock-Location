@@ -1,33 +1,84 @@
 package com.mockloc.domain.geocoding
 
-import com.mockloc.domain.model.GeoPoint
+import com.mockloc.domain.model.GeocodingResult
+import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.io.InputStream
+import java.net.HttpURLConnection
+import java.net.URL
 
-/**
- * 地理编码与逆地理编码服务接口。
- * 支持在线 HTTP 查询与离线高可用降级。
- */
 interface GeocodingService {
+    suspend fun search(query: String): Result<List<GeocodingResult>>
 
-    /**
-     * 根据关键字查询地点列表
-     *
-     * @param query 搜索关键词 (如 "天安门", "上海", "西湖")
-     * @param limit 返回候选结果的最大数量
-     * @return 匹配的地点列表
-     */
-    suspend fun search(query: String, limit: Int = 10): List<GeocodingResult>
+    suspend fun reverseGeocode(lat: Double, lon: Double): Result<GeocodingResult?>
+}
 
-    /**
-     * 根据坐标点逆向查询地点信息
-     *
-     * @param point 待查询的坐标点
-     * @return 对应的地点信息，若无匹配则返回 null
-     */
-    suspend fun reverse(point: GeoPoint): GeocodingResult?
+data class GeocodingHttpResponse(
+    val statusCode: Int,
+    val body: String
+)
 
-    /**
-     * 根据经纬度逆向查询地点信息的便捷方法
-     */
-    suspend fun reverse(latitude: Double, longitude: Double): GeocodingResult? =
-        reverse(GeoPoint(latitude, longitude))
+fun interface GeocodingHttpClient {
+    @Throws(IOException::class)
+    fun get(url: String): GeocodingHttpResponse
+}
+
+class HttpURLConnectionGeocodingClient(
+    private val connectTimeoutMs: Int = DEFAULT_TIMEOUT_MS,
+    private val readTimeoutMs: Int = DEFAULT_TIMEOUT_MS,
+    private val maxResponseBytes: Int = DEFAULT_MAX_RESPONSE_BYTES,
+    private val userAgent: String = DEFAULT_USER_AGENT,
+    private val referer: String = DEFAULT_REFERER
+) : GeocodingHttpClient {
+
+    @Throws(IOException::class)
+    override fun get(url: String): GeocodingHttpResponse {
+        val connection = (URL(url).openConnection() as? HttpURLConnection)
+            ?: throw IOException("Unsupported URL connection for $url")
+
+        try {
+            connection.requestMethod = "GET"
+            connection.connectTimeout = connectTimeoutMs
+            connection.readTimeout = readTimeoutMs
+            connection.instanceFollowRedirects = false
+            connection.useCaches = false
+            connection.setRequestProperty("User-Agent", userAgent)
+            connection.setRequestProperty("Accept", "application/json, text/plain, */*")
+            connection.setRequestProperty("Accept-Charset", "UTF-8")
+            connection.setRequestProperty("Referer", referer)
+
+            val statusCode = connection.responseCode
+            val stream = if (statusCode in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+            val body = stream?.use { readBoundedUtf8(it, maxResponseBytes) } ?: ""
+            return GeocodingHttpResponse(statusCode = statusCode, body = body)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun readBoundedUtf8(stream: InputStream, maxBytes: Int): String {
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        val out = ByteArrayOutputStream()
+        var total = 0
+        while (total < maxBytes) {
+            val remaining = maxBytes - total
+            val read = stream.read(buffer, 0, minOf(buffer.size, remaining))
+            if (read <= 0) break
+            out.write(buffer, 0, read)
+            total += read
+        }
+        return out.toString(Charsets.UTF_8.name())
+    }
+
+    companion object {
+        const val DEFAULT_TIMEOUT_MS = 2_500
+        const val DEFAULT_MAX_RESPONSE_BYTES = 512 * 1024
+        const val DEFAULT_USER_AGENT =
+            "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+        const val DEFAULT_REFERER = "https://ditu.amap.com/"
+    }
 }

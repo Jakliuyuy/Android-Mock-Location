@@ -10,6 +10,10 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
     <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <queries>
         <intent>
@@ -18,9 +22,10 @@
     </queries>
 
     <application
+        android:name=".MockLocApp"
         android:allowBackup="true"
         android:icon="@android:drawable/ic_menu_mylocation"
-        android:label="MockLocation"
+        android:label="@string/app_name"
         android:roundIcon="@android:drawable/ic_menu_mylocation"
         android:supportsRtl="true"
         android:usesCleartextTraffic="true"
@@ -31,17 +36,21 @@
             android:value="true" />
         <meta-data
             android:name="xposeddescription"
-            android:value="双模安卓模拟定位 Xposed &amp; Root 模块" />
+            android:value="@string/app_description" />
         <meta-data
             android:name="xposedminversion"
             android:value="93" />
+        <meta-data
+            android:name="xposedsharedprefs"
+            android:value="true" />
         <meta-data
             android:name="xposedscope"
             android:resource="@array/xposed_scope" />
 
         <activity
             android:name=".presentation.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -51,8 +60,13 @@
         <activity
             android:name=".presentation.WhitelistActivity"
             android:exported="false"
-            android:label="@string/title_whitelist"
-            android:parentActivityName=".presentation.MainActivity" />
+            android:windowSoftInputMode="adjustResize" />
+
+        <service
+            android:name=".service.MockLocationForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <provider
             android:name="com.mockloc.ipc.LocationConfigProvider"

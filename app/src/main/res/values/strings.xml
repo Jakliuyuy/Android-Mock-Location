@@ -3,88 +3,187 @@
     <string name="app_name">MockLocation</string>
     <string name="app_description">双模安卓模拟定位 Xposed &amp; Root 模块</string>
 
-    <!-- Toolbar & Titles -->
-    <string name="title_control_center">模拟定位控制中心</string>
-    <string name="title_whitelist">生效目标应用白名单</string>
+    <!-- 搜索栏与地图工具 -->
+    <string name="search_hint">搜索地点、POI 或输入经纬度（如 39.9087, 116.3975）</string>
+    <string name="cd_clear_search">清除搜索</string>
+    <string name="cd_open_favorites">打开收藏夹</string>
+    <string name="cd_open_whitelist">目标应用白名单</string>
+    <string name="cd_open_scope_guide">LSPosed 作用域引导</string>
+    <string name="cd_toggle_map_layer">切换矢量/卫星底图</string>
+    <string name="cd_center_target">定位到当前目标点</string>
+    <string name="cd_toggle_sheet">展开或折叠控制面板</string>
+    <string name="search_offline_fallback_banner">当前处于离线兜底模式，结果来自内置地标库</string>
+    <string name="search_empty_hint">未找到匹配地点，可尝试输入城市名或直接输入经纬度</string>
+    <string name="map_layer_vector">矢量图</string>
+    <string name="map_layer_satellite">卫星图</string>
 
-    <!-- Environment Status -->
-    <string name="status_title">运行环境与授权状态</string>
-    <string name="status_xposed">Xposed / LSPosed:</string>
-    <string name="status_root">Root 提权:</string>
-    <string name="status_active">已激活</string>
-    <string name="status_inactive">未激活</string>
-    <string name="status_available">已授权</string>
-    <string name="status_unavailable">未授权</string>
-    <string name="status_recommended_mode">推荐模式:</string>
-    <string name="mode_xposed_hook">Xposed 深度 Hook 模式 (免 Mock 标记)</string>
-    <string name="mode_root_provider">Root 原生系统 Provider 模式</string>
-    <string name="mode_unprivileged">无权限模式 (请激活 Xposed 或授予 Root)</string>
+    <!-- 环境状态与模式切换 -->
+    <string name="env_lsposed_active">LSPosed 已激活 (API %1$d)</string>
+    <string name="env_lsposed_inactive">LSPosed 未激活</string>
+    <string name="env_root_available">Root (%1$s)</string>
+    <string name="env_root_unavailable">无 Root</string>
+    <string name="env_refresh">刷新环境</string>
+    <string name="mode_auto">自动双模</string>
+    <string name="mode_lsposed_only">仅 LSPosed</string>
+    <string name="mode_root_only">仅 Root</string>
+    <string name="whitelist_empty_banner">当前白名单为空，LSPosed 模式不会拦截任何第三方应用。点击前往配置白名单。</string>
+    <string name="action_go_whitelist">去配置</string>
+    <string name="action_dismiss">忽略</string>
 
-    <!-- Operating Mode Switcher -->
-    <string name="mode_switcher_label">运行模式</string>
-    <string name="mode_single_point">单点模拟</string>
-    <string name="mode_cruise">轨迹巡航</string>
+    <!-- 模拟运行状态 -->
+    <string name="status_idle">待命中</string>
+    <string name="status_single_running">单点模拟运行中</string>
+    <string name="status_cruise_running">轨迹巡航中</string>
+    <string name="status_cruise_paused">轨迹巡航已暂停</string>
+    <string name="status_cruise_completed">单程巡航已完成</string>
+    <string name="status_error">运行异常：%1$s</string>
 
-    <!-- Search & Location -->
-    <string name="search_hint">搜索地点、城市或地标 (如: 天安门, 西湖)</string>
-    <string name="search_action">搜索</string>
-    <string name="search_no_results">未找到匹配的地点</string>
-    <string name="search_select_title">选择目标地点</string>
+    <!-- 模式分段 -->
+    <string name="tab_single_point">单点定位</string>
+    <string name="tab_route_cruise">路线巡航</string>
 
-    <!-- Coordinate Inputs -->
-    <string name="label_latitude">纬度 (Lat)</string>
-    <string name="label_longitude">经度 (Lng)</string>
-    <string name="label_altitude">海拔 (Alt, m)</string>
-    <string name="hint_latitude">例如 39.9087</string>
-    <string name="hint_longitude">例如 116.3975</string>
-    <string name="hint_altitude">例如 50.0</string>
+    <!-- 单点定位面板 -->
+    <string name="hint_latitude">纬度 (-90 ~ 90)</string>
+    <string name="hint_longitude">经度 (-180 ~ 180)</string>
+    <string name="hint_altitude">海拔 (m)</string>
+    <string name="hint_accuracy">精度 (m)</string>
+    <string name="coord_system_label">输入坐标系</string>
+    <string name="action_apply_coords">应用坐标</string>
+    <string name="action_favorite_current">收藏选点</string>
+    <string name="action_add_to_route">加入路线</string>
+    <string name="switch_tap_updates_running">点击地图同步更新运行中的单点</string>
+    <string name="action_start_single">开始单点模拟</string>
+    <string name="action_stop_mock">停止模拟</string>
 
-    <!-- Speed Presets -->
-    <string name="speed_preset_label">巡航速度</string>
-    <string name="speed_walk">步行 (5 km/h)</string>
-    <string name="speed_bike">骑行 (15 km/h)</string>
-    <string name="speed_drive">驾车 (60 km/h)</string>
-    <string name="speed_custom">自定义</string>
-    <string name="label_custom_speed">速度 (m/s)</string>
-
-    <!-- Loop Modes -->
-    <string name="loop_mode_label">巡航模式</string>
-    <string name="loop_mode_one_way">单向行驶</string>
+    <!-- 路线巡航面板 -->
+    <string name="route_name_hint">路线名称</string>
+    <string name="action_manage_routes">路线管理</string>
+    <string name="action_save_route">保存路线</string>
+    <string name="action_clear_waypoints">清空航点</string>
+    <string name="action_fit_route">全览路线</string>
+    <string name="waypoints_empty_hint">点击地图并按“加入路线”，或从收藏夹/示例路线加载航点</string>
+    <string name="speed_preset_walk">步行 5 km/h</string>
+    <string name="speed_preset_bike">骑行 15 km/h</string>
+    <string name="speed_preset_drive">驾车 60 km/h</string>
+    <string name="speed_preset_custom">自定义</string>
+    <string name="loop_mode_one_way">单程</string>
     <string name="loop_mode_ping_pong">往返折返</string>
     <string name="loop_mode_loop">闭环循环</string>
+    <string name="switch_speed_noise">自然速度波动 (AR-1)</string>
+    <string name="switch_micro_drift">微抖动漂移 (OU)</string>
+    <string name="switch_follow_cruise">视角跟随巡航</string>
+    <string name="action_start_cruise">开始路线巡航</string>
+    <string name="action_restart_cruise">重新开始巡航</string>
+    <string name="action_pause_cruise">暂停巡航</string>
+    <string name="action_resume_cruise">继续巡航</string>
 
-    <!-- Cruise Controls -->
-    <string name="btn_start_mock">开启单点模拟</string>
-    <string name="btn_stop_mock">停止模拟</string>
-    <string name="btn_start_cruise">开始巡航</string>
-    <string name="btn_pause_cruise">暂停</string>
-    <string name="btn_resume_cruise">继续</string>
-    <string name="btn_stop_cruise">停止巡航</string>
-    <string name="btn_open_whitelist">目标应用分流白名单</string>
+    <!-- 防检测配置 -->
+    <string name="anti_detect_section_title">防风控与环境拟真配置</string>
+    <string name="switch_jitter_single">单点微抖动偏移</string>
+    <string name="hint_jitter_radius">微抖动半径 (m)</string>
+    <string name="switch_anti_cell">基站信息反检测</string>
+    <string name="switch_anti_wifi">Wi-Fi 扫描反检测</string>
+    <string name="switch_anti_gnss">GNSS 卫星与 NMEA 拦截</string>
 
-    <!-- Whitelist Activity -->
-    <string name="search_apps_hint">搜索已安装应用名称或包名</string>
-    <string name="filter_system_apps">显示系统应用</string>
-    <string name="action_select_all">全选</string>
-    <string name="action_deselect_all">清空</string>
-    <string name="whitelist_summary_format">已选择 %1$d / %2$d 个应用</string>
-    <string name="whitelist_empty">未找到匹配的应用程序</string>
-    <string name="whitelist_saved">白名单配置已实时同步</string>
-    <string name="whitelist_dialog_title">白名单提示</string>
-    <string name="whitelist_empty_warning">当前尚未勾选任何生效目标应用，模拟定位可能不会对特定应用生效。是否仍然开启？</string>
+    <!-- 收藏夹 BottomSheet -->
+    <string name="favorites_title">常用地点收藏夹</string>
+    <string name="favorites_search_hint">搜索收藏名称或地址</string>
+    <string name="action_add_current_favorite">收藏当前选点</string>
+    <string name="action_reset_favorites">恢复默认</string>
+    <string name="favorites_empty">暂无匹配的收藏地点</string>
 
-    <!-- Messages & Validation -->
-    <string name="invalid_coordinates">请输入合法的经纬度 (-90~90, -180~180)</string>
-    <string name="mock_started">模拟定位已开启</string>
-    <string name="mock_stopped">模拟定位已停止</string>
-    <string name="cruise_started">轨迹巡航已开始</string>
-    <string name="cruise_paused">巡航已暂停</string>
-    <string name="cruise_resumed">巡航已继续</string>
-    <string name="cruise_stopped">巡航已停止</string>
-    <string name="btn_favorites">我的收藏</string>
-    <string name="btn_add_favorite">收藏此点</string>
-    <string name="dialog_add_fav_title">收藏当前选点</string>
-    <string name="dialog_add_fav_hint">请输入地点名称 (如: 六盘水凉都公园)</string>
-    <string name="fav_added_success">已成功加入收藏夹</string>
-    <string name="fav_deleted">已移除收藏</string>
+    <!-- 路线管理 BottomSheet -->
+    <string name="route_manager_title">已保存路线管理</string>
+    <string name="action_reset_sample_routes">恢复示例路线</string>
+    <string name="routes_empty">暂无已保存路线</string>
+
+    <!-- 白名单管理页 -->
+    <string name="whitelist_title">目标应用分流白名单</string>
+    <string name="whitelist_search_hint">搜索应用名称或包名</string>
+    <string name="whitelist_show_system">显示系统应用</string>
+    <string name="whitelist_select_all">全选筛选</string>
+    <string name="whitelist_clear_filtered">清空筛选</string>
+    <string name="whitelist_import_recommended">一键导入已安装推荐应用</string>
+    <string name="whitelist_empty">没有匹配的应用</string>
+
+    <!-- LSPosed 推荐作用域引导 -->
+    <string name="scope_guide_title">LSPosed 模块作用域引导</string>
+    <string name="scope_guide_steps_title">配置步骤（Android 14–17 推荐）</string>
+    <string name="scope_guide_steps_body">1. 在 LSPosed 管理器中开启「MockLocation」模块。\n2. 在模块作用域内勾选本模块（MockLocation）及下方的目标应用（无需全局勾选 Android 系统框架）。\n3. 点击下方按钮将已安装的推荐应用一键同步至应用内分流白名单。\n4. 强行停止目标应用后重新打开，Hook 与反检测即可实时生效。</string>
+    <string name="scope_guide_import_all">一键将已安装推荐应用加入白名单</string>
+    <string name="action_copy_package">复制包名</string>
+    <string name="action_close">关闭</string>
+
+    <!-- 补充提取的 UI 文本与格式化模板 -->
+    <string name="action_search">搜索</string>
+    <string name="whitelist_badge_format">白名单: %1$d</string>
+    <string name="whitelist_badge_default">白名单: 0</string>
+    <string name="quick_action_start">开始</string>
+    <string name="quick_action_stop">停止</string>
+    <string name="quick_action_restart">重跑</string>
+    <string name="mock_mode_section_label">模拟链路模式</string>
+    <string name="coord_chip_wgs84">WGS-84 (GPS)</string>
+    <string name="coord_chip_gcj02">GCJ-02 (高德/腾讯)</string>
+    <string name="coord_chip_bd09">BD-09 (百度)</string>
+    <string name="cruise_speed_section_label">巡航速度</string>
+    <string name="loop_mode_section_label">循环方式</string>
+    <string name="action_apply_short">应用</string>
+    <string name="action_save">保存</string>
+    <string name="action_cancel">取消</string>
+    <string name="action_confirm">确定</string>
+    <string name="action_update">更新</string>
+    <string name="action_delete">删除</string>
+    <string name="action_load">加载</string>
+    <string name="action_use_single">设为单点</string>
+    <string name="cd_edit_favorite">编辑收藏</string>
+    <string name="cd_delete_favorite">删除收藏</string>
+    <string name="cd_rename_route">重命名路线</string>
+    <string name="cd_delete_route">删除路线</string>
+    <string name="cd_move_up">上移</string>
+    <string name="cd_move_down">下移</string>
+    <string name="cd_remove_waypoint">删除航点</string>
+    <string name="cd_app_icon">应用图标</string>
+    <string name="badge_recommended">推荐</string>
+    <string name="badge_system">系统</string>
+    <string name="badge_scope_only">仅作用域</string>
+    <string name="badge_installed">已安装</string>
+    <string name="badge_not_installed">未安装</string>
+    <string name="badge_source_online">在线</string>
+    <string name="badge_source_offline">离线兜底</string>
+    <string name="badge_source_parsed">坐标解析</string>
+    <string name="waypoint_unnamed">未命名</string>
+    <string name="waypoint_title_format">航点 %1$d：%2$s</string>
+    <string name="waypoint_default_name_format">航点 %1$d</string>
+    <string name="sheet_summary_coords_format">WGS-84 %1$.5f, %2$.5f</string>
+    <string name="coord_comparison_format">权威存储 WGS-84: %1$.6f, %2$.6f (海拔 %3$.1fm)\n高德展示 GCJ-02: %4$.6f, %5$.6f%6$s</string>
+    <string name="coord_out_of_china_tag">&#160;[境外无偏转]</string>
+    <string name="route_stats_format">共 %1$d 个航点 · 总距离 %2$s</string>
+    <string name="custom_speed_value_format">自定义速度：%1$.1f m/s (%2$.1f km/h)</string>
+    <string name="cruise_telemetry_format">进度 %1$.1f%% · 航点 %2$d/%3$d · 速度 %4$.1f m/s · 航向 %5$.0f°</string>
+    <string name="dialog_fav_title_add">收藏当前选点</string>
+    <string name="dialog_fav_hint_name_required">收藏名称（必填）</string>
+    <string name="dialog_fav_hint_addr_optional">地址备注（可选）</string>
+    <string name="dialog_fav_title_edit">编辑收藏地点</string>
+    <string name="dialog_fav_hint_name">收藏名称</string>
+    <string name="dialog_fav_hint_addr">地址备注</string>
+    <string name="dialog_fav_title_delete">删除收藏</string>
+    <string name="dialog_fav_msg_delete">确认删除收藏「%1$s」吗？</string>
+    <string name="dialog_fav_title_reset">恢复默认收藏</string>
+    <string name="dialog_fav_msg_reset">确认追加或恢复内置的 5 个常用城市地标吗？</string>
+    <string name="dialog_route_title_reset">恢复示例路线</string>
+    <string name="dialog_route_msg_reset">确认恢复 3 条内置示例路线吗？</string>
+    <string name="dialog_route_title_rename">重命名路线</string>
+    <string name="dialog_route_hint_new_name">新路线名称</string>
+    <string name="dialog_route_title_delete">删除路线</string>
+    <string name="dialog_route_msg_delete">确认删除路线「%1$s」吗？</string>
+    <string name="whitelist_selected_subtitle_format">已选择 %1$d 个目标应用</string>
+    <string name="scope_summary_stats_format">已安装推荐目标应用：%1$d / %2$d（含模块自身与系统框架共 %3$d 项说明）</string>
+    <string name="fav_no_address">无备注地址</string>
+    <string name="fav_coords_format">WGS-84: %1$.6f, %2$.6f  海拔 %3$.1fm</string>
+    <string name="fav_usage_count_format">已用 %1$d 次</string>
+    <string name="fav_usage_default">常用地标</string>
+    <string name="route_meta_format">%1$d 个航点 · 总长 %2$s</string>
+    <string name="search_result_default_addr">WGS-84 坐标点</string>
+    <string name="search_result_coords_format">WGS-84: %1$.6f, %2$.6f</string>
+    <string name="default_selected_address_hint">点击地图或搜索地点以选点</string>
 </resources>

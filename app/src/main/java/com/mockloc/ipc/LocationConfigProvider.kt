@@ -5,74 +5,110 @@ import android.content.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
+import android.os.Binder
 import android.os.Bundle
-import com.mockloc.data.MockConfigManager
+import android.os.Process
+import com.mockloc.data.config.MockConfigRepository
 
-import com.mockloc.data.WhitelistRepository
+class LocationConfigProvider(
+    private val repositoryResolver: ((Context?) -> MockConfigRepository?)? = null,
+    private val callingUidProvider: (() -> Int)? = null,
+    private val myUidProvider: (() -> Int)? = null,
+    private val bundleFactory: () -> Bundle = { Bundle() }
+) : ContentProvider() {
 
-/**
- * 跨进程配置同步桥接 ContentProvider。
- * 在 Android 7.0+ 及 SELinux Enforcing 模式下，允许被注入 Hook 的目标应用进程
- * 免文件系统权限拉取主控端的定位配置与防检测设置。
- */
-class LocationConfigProvider : ContentProvider() {
-
-    companion object {
-        val CONTENT_URI: Uri
-            get() = Uri.parse("content://${MockConfigManager.AUTHORITY}")
-
-        /**
-         * 供 Hook 引擎在目标应用进程内跨进程拉取主控配置
-         */
-        @JvmStatic
-        fun fetchConfig(context: Context, targetPackage: String?): Bundle? {
-            return try {
-                context.contentResolver.call(
-                    CONTENT_URI,
-                    MockConfigManager.METHOD_GET_CONFIG,
-                    targetPackage,
-                    null
-                )
-            } catch (t: Throwable) {
-                t.printStackTrace()
-                null
-            }
-        }
-    }
+    constructor() : this(null, null, null, { Bundle() })
 
     override fun onCreate(): Boolean {
-        context?.let { ctx ->
-            try {
-                WhitelistRepository.getInstance(ctx)
-            } catch (_: Throwable) {}
+        return try {
+            resolveRepository(context)
+            true
+        } catch (_: Throwable) {
+            false
         }
-        return true
     }
 
-    override fun call(method: String, arg: String?, extras: Bundle?): Bundle? {
-        context?.let { ctx ->
-            try {
-                WhitelistRepository.getInstance(ctx)
-            } catch (_: Throwable) {}
-        }
-        return when (method) {
-            MockConfigManager.METHOD_GET_CONFIG -> {
-                val bundle = MockConfigManager.toBundle()
-                // 如果传入了目标包名，计算针对该包名的专属生效状态
-                if (!arg.isNullOrEmpty()) {
-                    val enabledForPkg = MockConfigManager.isMockEnabledForPackage(arg)
-                    bundle.putBoolean(MockConfigManager.KEY_IS_MOCK_ENABLED, enabledForPkg)
+    override fun call(method: String, arg: String?, extras: Bundle?): Bundle {
+        return try {
+            val repo = resolveRepository(context)
+
+            when (method) {
+                IpcProtocol.METHOD_PING -> {
+                    val version = repo?.currentConfig?.version ?: 0L
+                    bundleFactory().apply {
+                        putBoolean(IpcProtocol.RESULT_OK, true)
+                        putLong(IpcProtocol.KEY_VERSION, version)
+                    }
                 }
-                bundle
-            }
-            MockConfigManager.METHOD_SET_CONFIG -> {
-                if (extras != null) {
-                    MockConfigManager.updateFromBundle(extras)
+
+                IpcProtocol.METHOD_GET_CONFIG -> {
+                    val config = repo?.currentConfig
+                        ?: return bundleFactory().apply {
+                            putBoolean(IpcProtocol.RESULT_OK, false)
+                            putString(IpcProtocol.RESULT_ERROR, "REPOSITORY_UNAVAILABLE")
+                        }
+                    val bundle = ConfigSyncSerializer.toBundle(config, bundleFactory())
+                    bundle.putBoolean(IpcProtocol.KEY_GLOBAL_MOCK_ENABLED, config.enabled)
+                    if (!arg.isNullOrBlank()) {
+                        bundle.putBoolean(
+                            IpcProtocol.KEY_IS_MOCK_ENABLED,
+                            config.isEnabledForPackage(arg)
+                        )
+                    } else {
+                        bundle.putBoolean(IpcProtocol.KEY_IS_MOCK_ENABLED, config.enabled)
+                    }
+                    bundle.putBoolean(IpcProtocol.RESULT_OK, true)
+                    bundle
                 }
-                Bundle().apply { putBoolean("success", true) }
+
+                IpcProtocol.METHOD_SET_CONFIG -> {
+                    val callingUid = callingUidProvider?.invoke() ?: Binder.getCallingUid()
+                    val myUid = myUidProvider?.invoke() ?: Process.myUid()
+                    if (callingUid != myUid) {
+                        return bundleFactory().apply {
+                            putBoolean(IpcProtocol.RESULT_OK, false)
+                            putString(
+                                IpcProtocol.RESULT_ERROR,
+                                "PERMISSION_DENIED_UID: callingUid=$callingUid, expected=$myUid"
+                            )
+                        }
+                    }
+                    if (extras == null) {
+                        return bundleFactory().apply {
+                            putBoolean(IpcProtocol.RESULT_OK, false)
+                            putString(IpcProtocol.RESULT_ERROR, "MISSING_EXTRAS")
+                        }
+                    }
+                    if (repo == null) {
+                        return bundleFactory().apply {
+                            putBoolean(IpcProtocol.RESULT_OK, false)
+                            putString(IpcProtocol.RESULT_ERROR, "REPOSITORY_UNAVAILABLE")
+                        }
+                    }
+                    val parsed = ConfigSyncSerializer.fromBundle(extras, repo.currentConfig)
+                    val updated = repo.updateImmediate { parsed }
+                    bundleFactory().apply {
+                        putBoolean(IpcProtocol.RESULT_OK, true)
+                        putLong(IpcProtocol.KEY_VERSION, updated.version)
+                    }
+                }
+
+                else -> bundleFactory().apply {
+                    putBoolean(IpcProtocol.RESULT_OK, false)
+                    putString(IpcProtocol.RESULT_ERROR, "UNKNOWN_METHOD:$method")
+                }
             }
-            else -> super.call(method, arg, extras)
+        } catch (t: Throwable) {
+            bundleFactory().apply {
+                putBoolean(IpcProtocol.RESULT_OK, false)
+                putString(IpcProtocol.RESULT_ERROR, t.message ?: "INTERNAL_ERROR")
+            }
         }
+    }
+
+    private fun resolveRepository(ctx: Context?): MockConfigRepository? {
+        repositoryResolver?.let { return it.invoke(ctx) }
+        return ctx?.let { MockConfigRepository.getInstance(it) }
     }
 
     override fun query(
