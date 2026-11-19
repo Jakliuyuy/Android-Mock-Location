@@ -267,10 +267,10 @@ class DomesticGeocodingServiceTest {
     @Test
     fun `UT-G08 uses injected ioDispatcher and propagates CancellationException`() = runTest {
         val testDispatcher = StandardTestDispatcher(testScheduler)
-        var capturedUrl: String? = null
+        val capturedUrls = mutableListOf<String>()
 
         val slowClient = GeocodingHttpClient { url ->
-            capturedUrl = url
+            capturedUrls.add(url)
             Thread.sleep(50)
             GeocodingHttpResponse(200, """{"status":"1","data":{"tip_list":[]}}""")
         }
@@ -282,12 +282,12 @@ class DomesticGeocodingServiceTest {
 
         val deferred = async { service.search("天安门") }
         // StandardTestDispatcher 尚未推进前不应执行 HTTP 请求
-        assertNull(capturedUrl)
+        assertTrue(capturedUrls.isEmpty())
 
         testScheduler.advanceUntilIdle()
         val result = deferred.await()
-        assertNotNull(capturedUrl)
-        assertTrue(capturedUrl!!.contains("ditu.amap.com/service/poiTipslite"))
+        assertTrue(capturedUrls.isNotEmpty())
+        assertTrue(capturedUrls.first().contains("ditu.amap.com/service/poiTipslite"))
         assertTrue(result.getOrThrow().isNotEmpty())
 
         // 验证 CancellationException 原样传播而非被吞掉
@@ -525,5 +525,87 @@ class DomesticGeocodingServiceTest {
         assertEquals(CoordinateParseOutcome.OutOfRangeOrInvalid, CoordinateQueryParser.parseWithStatus("ｇｃｊ０２：　"))
         assertTrue(service.search("gcj02:   ").getOrThrow().isEmpty())
         assertEquals(0, callCount.get())
+    }
+
+    @Test
+    fun `multi-provider cascade resolves Liupanshui via Photon Nominatim or Open-Meteo when Amap returns risk HTML`() = runTest {
+        // 1) Amap 风控 HTML -> Photon 成功返回
+        val photonRequester = FakeGeocodingHttpRequester().apply {
+            stubSuccess(Regex(".*ditu\\.amap\\.com.*"), "<!DOCTYPE html><html><script src='punish'></script></html>")
+            stubSuccess(
+                Regex(".*photon\\.komoot\\.io.*"),
+                """
+                {
+                  "type": "FeatureCollection",
+                  "features": [
+                    {
+                      "properties": {"name": "六盘水市", "city": "六盘水市", "state": "贵州省", "country": "中国"},
+                      "geometry": {"type": "Point", "coordinates": [104.83333, 26.59444]}
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        }
+        val (photonService, _) = newService(photonRequester)
+        val photonRes = photonService.search("六盘水").getOrThrow()
+        assertEquals(1, photonRes.size)
+        assertEquals("六盘水市", photonRes[0].name)
+        assertEquals("photon_online", photonRes[0].source)
+        assertEquals(26.59444, photonRes[0].latitude, 1e-5)
+        assertEquals(104.83333, photonRes[0].longitude, 1e-5)
+
+        // 2) Amap + Photon 失败 -> Nominatim 成功返回
+        val nominatimRequester = FakeGeocodingHttpRequester().apply {
+            stubSuccess(Regex(".*ditu\\.amap\\.com.*"), "<html>blocked</html>")
+            stubHttpError(Regex(".*photon\\.komoot\\.io.*"), 503, "busy")
+            stubSuccess(
+                Regex(".*nominatim\\.openstreetmap\\.org.*"),
+                """
+                [
+                  {
+                    "lat": "26.5963778",
+                    "lon": "104.8279652",
+                    "name": "六盘水市",
+                    "display_name": "六盘水市, 贵州省, 中国"
+                  }
+                ]
+                """.trimIndent()
+            )
+        }
+        val (nominatimService, _) = newService(nominatimRequester)
+        val nomRes = nominatimService.search("六盘水").getOrThrow()
+        assertEquals(1, nomRes.size)
+        assertEquals("六盘水市", nomRes[0].name)
+        assertEquals("nominatim_online", nomRes[0].source)
+
+        // 3) Amap + Photon + Nominatim 失败 -> Open-Meteo 成功返回
+        val openMeteoRequester = FakeGeocodingHttpRequester().apply {
+            stubSuccess(Regex(".*ditu\\.amap\\.com.*"), "<html>blocked</html>")
+            stubTimeout(Regex(".*photon\\.komoot\\.io.*"))
+            stubTimeout(Regex(".*nominatim\\.openstreetmap\\.org.*"))
+            stubSuccess(
+                Regex(".*geocoding-api\\.open-meteo\\.com.*"),
+                """
+                {
+                  "results": [
+                    {
+                      "name": "六盘水市",
+                      "latitude": 26.59444,
+                      "longitude": 104.83333,
+                      "country": "中国",
+                      "admin1": "贵州",
+                      "admin2": "六盘水市"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        }
+        val (omService, _) = newService(openMeteoRequester)
+        val omRes = omService.search("六盘水").getOrThrow()
+        assertEquals(1, omRes.size)
+        assertEquals("六盘水市", omRes[0].name)
+        assertEquals("open_meteo_online", omRes[0].source)
     }
 }

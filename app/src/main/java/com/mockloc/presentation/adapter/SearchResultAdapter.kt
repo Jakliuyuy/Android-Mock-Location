@@ -42,7 +42,10 @@ class SearchResultAdapter(
                 item.longitude
             )
             binding.tvResultSourceBadge.text = when (item.source) {
-                "amap_web", "amap_regeo" -> ctx.getString(R.string.badge_source_online)
+                "amap_web", "amap_regeo",
+                "photon_online", "photon_regeo",
+                "nominatim_online", "nominatim_regeo",
+                "open_meteo_online" -> ctx.getString(R.string.badge_source_online)
                 OfflineFallbackGeocodingService.SOURCE_FALLBACK,
                 OfflineFallbackGeocodingService.SOURCE_NEAREST,
                 OfflineFallbackGeocodingService.SOURCE_COORD -> ctx.getString(R.string.badge_source_offline)

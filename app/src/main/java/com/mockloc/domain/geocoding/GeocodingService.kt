@@ -40,12 +40,19 @@ class HttpURLConnectionGeocodingClient(
             connection.requestMethod = "GET"
             connection.connectTimeout = connectTimeoutMs
             connection.readTimeout = readTimeoutMs
-            connection.instanceFollowRedirects = false
+            connection.instanceFollowRedirects = true
             connection.useCaches = false
-            connection.setRequestProperty("User-Agent", userAgent)
+            val isAmap = url.contains("amap.com", ignoreCase = true)
+            connection.setRequestProperty(
+                "User-Agent",
+                if (isAmap) userAgent else OPEN_API_USER_AGENT
+            )
             connection.setRequestProperty("Accept", "application/json, text/plain, */*")
             connection.setRequestProperty("Accept-Charset", "UTF-8")
-            connection.setRequestProperty("Referer", referer)
+            connection.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.5")
+            if (isAmap) {
+                connection.setRequestProperty("Referer", referer)
+            }
 
             val statusCode = connection.responseCode
             val stream = if (statusCode in 200..299) {
@@ -75,10 +82,11 @@ class HttpURLConnectionGeocodingClient(
     }
 
     companion object {
-        const val DEFAULT_TIMEOUT_MS = 2_500
+        const val DEFAULT_TIMEOUT_MS = 4_500
         const val DEFAULT_MAX_RESPONSE_BYTES = 512 * 1024
         const val DEFAULT_USER_AGENT =
             "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
+        const val OPEN_API_USER_AGENT = "MockLocationApp/2.0 (Android; +https://github.com/Jakliuyuy/Android-Mock-Location)"
         const val DEFAULT_REFERER = "https://ditu.amap.com/"
     }
 }
