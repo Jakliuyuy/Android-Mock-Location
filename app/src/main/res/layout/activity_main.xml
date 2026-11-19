@@ -199,6 +199,22 @@
                     android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
                     android:textColor="@color/status_info" />
 
+                <TextView
+                    android:id="@+id/tvAnnouncementBadge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_status_badge"
+                    android:backgroundTint="@color/status_warning_container"
+                    android:clickable="true"
+                    android:elevation="2dp"
+                    android:focusable="true"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="6dp"
+                    android:text="@string/badge_announcement"
+                    android:textAppearance="@style/TextAppearance.Material3.LabelMedium"
+                    android:textColor="@color/status_warning" />
+
                 <ImageButton
                     android:id="@+id/btnRefreshEnv"
                     android:layout_width="32dp"

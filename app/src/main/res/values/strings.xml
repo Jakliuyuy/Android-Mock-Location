@@ -183,6 +183,12 @@
     <string name="fav_usage_count_format">已用 %1$d 次</string>
     <string name="fav_usage_default">常用地标</string>
     <string name="route_meta_format">%1$d 个航点 · 总长 %2$s</string>
+    <string name="badge_announcement">📢 公告</string>
+    <string name="announcement_empty">当前暂无新公告</string>
+    <string name="announcement_ack">我知道了</string>
+    <string name="announcement_open_link">查看详情</string>
+    <string name="remote_blocked_title">应用已停用</string>
+    <string name="remote_exit_app">退出应用</string>
     <string name="search_result_default_addr">WGS-84 坐标点</string>
     <string name="search_result_coords_format">WGS-84: %1$.6f, %2$.6f</string>
     <string name="default_selected_address_hint">点击地图或搜索地点以选点</string>

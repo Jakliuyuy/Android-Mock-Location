@@ -6,8 +6,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import androidx.appcompat.app.AlertDialog
 import android.view.View
 import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
@@ -32,6 +34,9 @@ import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
 import com.google.android.material.textfield.TextInputLayout
 import com.mockloc.R
+import com.mockloc.data.remote.RemoteAnnouncement
+import com.mockloc.data.remote.RemoteControlCheckResult
+import com.mockloc.data.remote.RemoteControlRepository
 import com.mockloc.databinding.ActivityMainBinding
 import com.mockloc.domain.engine.LoopMode
 import com.mockloc.domain.engine.SpeedPreset
@@ -68,6 +73,10 @@ class MainActivity : AppCompatActivity() {
     private lateinit var waypointAdapter: WaypointAdapter
 
     private var isUpdatingUi = false
+    private val remoteControlRepository by lazy { RemoteControlRepository.getInstance(applicationContext) }
+    private var blockingDialog: AlertDialog? = null
+    private var announcementDialog: AlertDialog? = null
+    private var latestRemoteCheck: RemoteControlCheckResult? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -106,6 +115,7 @@ class MainActivity : AppCompatActivity() {
         setupSinglePointSection()
         setupCruiseSection()
         setupAntiDetectSection()
+        setupRemoteControlSection()
         observeStateAndEvents()
     }
 
@@ -883,10 +893,107 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    private fun setupRemoteControlSection() {
+        binding.tvAnnouncementBadge.setOnClickListener {
+            checkRemoteControl(manualOpenAnnouncement = true)
+        }
+        val cached = remoteControlRepository.getCachedState()
+        latestRemoteCheck = cached
+        if (cached.isBlocked) {
+            enforceRemoteBlock(cached)
+        }
+    }
+
+    private fun checkRemoteControl(manualOpenAnnouncement: Boolean = false) {
+        lifecycleScope.launch {
+            val result = remoteControlRepository.fetchAndEvaluate()
+            latestRemoteCheck = result
+            if (isFinishing || isDestroyed) return@launch
+
+            if (result.isBlocked) {
+                enforceRemoteBlock(result)
+                return@launch
+            } else {
+                blockingDialog?.dismiss()
+                blockingDialog = null
+            }
+
+            if (manualOpenAnnouncement) {
+                val ann = result.latestAnnouncement
+                if (ann != null) {
+                    showAnnouncementDialog(ann)
+                } else {
+                    showMainSnackbar(getString(R.string.announcement_empty))
+                }
+            } else {
+                result.announcementToAutoShow?.let { ann ->
+                    showAnnouncementDialog(ann)
+                }
+            }
+        }
+    }
+
+    private fun enforceRemoteBlock(result: RemoteControlCheckResult) {
+        runCatching { viewModel.stopMock() }
+        if (blockingDialog?.isShowing == true) return
+        announcementDialog?.dismiss()
+
+        val builder = MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.remote_blocked_title)
+            .setMessage(result.blockReason)
+            .setCancelable(false)
+            .setPositiveButton(R.string.remote_exit_app) { _, _ ->
+                finishAffinity()
+            }
+
+        if (result.blockActionUrl.isNotBlank()) {
+            builder.setNeutralButton(R.string.announcement_open_link) { _, _ ->
+                openExternalUrl(result.blockActionUrl)
+                finishAffinity()
+            }
+        }
+
+        val dialog = builder.create()
+        dialog.setCanceledOnTouchOutside(false)
+        dialog.show()
+        blockingDialog = dialog
+    }
+
+    private fun showAnnouncementDialog(ann: RemoteAnnouncement) {
+        if (blockingDialog?.isShowing == true) return
+        announcementDialog?.dismiss()
+
+        val builder = MaterialAlertDialogBuilder(this)
+            .setTitle(ann.title)
+            .setMessage(ann.message)
+            .setPositiveButton(R.string.announcement_ack) { _, _ ->
+                remoteControlRepository.markAnnouncementDismissed(ann.id)
+            }
+
+        if (ann.actionUrl.isNotBlank()) {
+            builder.setNeutralButton(R.string.announcement_open_link) { _, _ ->
+                remoteControlRepository.markAnnouncementDismissed(ann.id)
+                openExternalUrl(ann.actionUrl)
+            }
+        }
+
+        announcementDialog = builder.show()
+    }
+
+    private fun openExternalUrl(url: String) {
+        runCatching {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         mapController.onResume()
         viewModel.refreshEnvironment()
+        checkRemoteControl(manualOpenAnnouncement = false)
     }
 
     override fun onPause() {
@@ -895,6 +1002,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        blockingDialog?.dismiss()
+        announcementDialog?.dismiss()
         if (::mapController.isInitialized) {
             mapController.onDetach()
         }
