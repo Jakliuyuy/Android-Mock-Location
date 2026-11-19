@@ -7,15 +7,35 @@ android {
     namespace = "com.mockloc"
     compileSdk = 35
     buildToolsVersion = "35.0.0"
+    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "com.mockloc"
         minSdk = 26
         targetSdk = 34
-        versionCode = 12
-        versionName = "2.0.3"
+        versionCode = 13
+        versionName = "2.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
+        }
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = file("../mockloc-release.jks")
+            storePassword = System.getenv("MOCKLOC_STORE_PASSWORD") ?: "MockLoc@2026!Key"
+            keyAlias = System.getenv("MOCKLOC_KEY_ALIAS") ?: "mockloc"
+            keyPassword = System.getenv("MOCKLOC_KEY_PASSWORD") ?: "MockLoc@2026!Key"
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     lint {
@@ -24,12 +44,13 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             signingConfig = signingConfigs.getByName("debug")

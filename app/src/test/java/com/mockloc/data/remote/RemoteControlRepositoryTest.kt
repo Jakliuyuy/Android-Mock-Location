@@ -1,7 +1,7 @@
 package com.mockloc.data.remote
 
+import android.content.Context
 import android.content.SharedPreferences
-import com.mockloc.domain.geocoding.GeocodingHttpClient
 import com.mockloc.domain.geocoding.GeocodingHttpResponse
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
@@ -18,20 +18,63 @@ import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mockito
 import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.whenever
+import java.io.IOException
 
 class RemoteControlRepositoryTest {
 
+    private lateinit var mockContext: Context
     private lateinit var mockPrefs: SharedPreferences
     private lateinit var mockEditor: SharedPreferences.Editor
     private val boolStore = mutableMapOf<String, Boolean>()
     private val intStore = mutableMapOf<String, Int>()
     private val strStore = mutableMapOf<String, String>()
 
+    private class FakeSecurityBridge(
+        var endpoint: String = "http://129.151.9.55/mlapi/v1/heartbeat",
+        var signatureValid: Boolean = true
+    ) : SecurityBridgeGateway {
+        var activeToken: Long = 0L
+        var lastPayload: String = ""
+        var revokeCalledCount: Int = 0
+
+        override fun getEndpointUrl(context: Context): String = endpoint
+
+        override fun verifyAndGrantLease(
+            context: Context,
+            payload: String,
+            sigHex: String,
+            leaseSeconds: Long,
+            effectiveEnabled: Boolean,
+            minVersionCode: Int,
+            currentVersionCode: Int
+        ): Long {
+            lastPayload = payload
+            if (!signatureValid || !effectiveEnabled || currentVersionCode < minVersionCode || leaseSeconds <= 0L) {
+                activeToken = 0L
+                return 0L
+            }
+            activeToken = 0x123456789ABCDEF0L
+            return activeToken
+        }
+
+        override fun checkLeaseToken(context: Context): Long = activeToken
+
+        override fun revokeLease() {
+            activeToken = 0L
+            revokeCalledCount++
+        }
+    }
+
     @Before
     fun setUp() {
         boolStore.clear()
         intStore.clear()
         strStore.clear()
+
+        mockContext = Mockito.mock(Context::class.java)
+        whenever(mockContext.applicationContext).thenReturn(mockContext)
+        whenever(mockContext.packageName).thenReturn("com.mockloc")
+
         mockPrefs = Mockito.mock(SharedPreferences::class.java)
         mockEditor = Mockito.mock(SharedPreferences.Editor::class.java)
 
@@ -60,95 +103,196 @@ class RemoteControlRepositoryTest {
             if (valStr == null) strStore.remove(key) else strStore[key] = valStr
             mockEditor
         }
+        whenever(mockEditor.remove(anyString())).thenAnswer { inv ->
+            val key = inv.getArgument<String>(0)
+            boolStore.remove(key)
+            intStore.remove(key)
+            strStore.remove(key)
+            mockEditor
+        }
+    }
+
+    private fun buildRepo(
+        client: RemoteJsonPostClient,
+        bridge: SecurityBridgeGateway,
+        versionCode: Int = 13,
+        nonce: String = "fixed-nonce-001"
+    ): RemoteControlRepository {
+        return RemoteControlRepository(
+            context = mockContext,
+            currentVersionCode = versionCode,
+            currentVersionName = "2.1.0",
+            postClient = client,
+            securityBridge = bridge,
+            ioDispatcher = Dispatchers.Unconfined,
+            deviceFingerprintProvider = { "dev-fp-123" },
+            appSignatureProvider = { "sig-sha256-abc" },
+            nonceGenerator = { nonce },
+            prefs = mockPrefs
+        )
     }
 
     @Test
-    fun `remote kill switch blocks app and persists offline lock even after network loss`() = runTest {
+    fun `first launch offline without lease fails closed`() = runTest {
+        val bridge = FakeSecurityBridge()
+        val client = RemoteJsonPostClient { _, _ -> throw IOException("No network") }
+        val repo = buildRepo(client, bridge)
+
+        val result = repo.checkAndRefresh()
+        assertTrue(result.isBlocked)
+        assertTrue(result.isNetworkRequired)
+        assertFalse(repo.hasActiveLease())
+    }
+
+    @Test
+    fun `valid heartbeat grants lease, allows offline during lease, and expires when lease ends`() = runTest {
+        val bridge = FakeSecurityBridge()
         var failNetwork = false
-        val client = GeocodingHttpClient { url ->
-            if (failNetwork) throw java.io.IOException("offline")
+        val client = RemoteJsonPostClient { _, _ ->
+            if (failNetwork) throw IOException("offline")
             GeocodingHttpResponse(
                 200,
                 """
                 {
-                  "appEnabled": false,
-                  "minVersionCode": 1,
-                  "disableReason": "已停用测试版本",
+                  "nonce": "fixed-nonce-001",
+                  "appEnabled": true,
+                  "deviceBlocked": false,
+                  "effectiveEnabled": true,
+                  "minVersionCode": 13,
+                  "serverTime": 1700000000,
+                  "leaseSeconds": 1800,
+                  "disableReason": "",
                   "announcement": {
                     "enabled": true,
-                    "id": "n1",
-                    "title": "通知",
-                    "message": "内容"
-                  }
+                    "id": "ann-210",
+                    "forceShow": false,
+                    "title": "新版本上线",
+                    "message": "欢迎使用 v2.1.0",
+                    "actionUrl": "https://example.com"
+                  },
+                  "signature": "deadbeef"
                 }
                 """.trimIndent()
             )
         }
-        val repo = RemoteControlRepository(
-            prefs = mockPrefs,
-            httpClient = client,
-            ioDispatcher = Dispatchers.Unconfined,
-            currentVersionCodeProvider = { 12 }
-        )
+        val repo = buildRepo(client, bridge)
 
-        val onlineRes = repo.fetchAndEvaluate()
-        assertTrue(onlineRes.isBlocked)
-        assertEquals("已停用测试版本", onlineRes.blockReason)
-        assertNull(onlineRes.announcementToAutoShow)
+        val onlineRes = repo.checkAndRefresh()
+        assertFalse(onlineRes.isBlocked)
+        assertTrue(repo.hasActiveLease())
+        assertNotNull(onlineRes.announcementToAutoShow)
+        assertEquals("ann-210", onlineRes.announcementToAutoShow?.id)
 
-        // 断网重开后应依然读取本地锁死缓存，防止断网绕过
+        // 标记已读后不再自动弹出
+        repo.markAnnouncementDismissed("ann-210")
         failNetwork = true
-        val offlineRes = repo.fetchAndEvaluate()
-        assertTrue(offlineRes.isBlocked)
-        assertFalse(offlineRes.fromNetwork)
-        assertEquals("已停用测试版本", offlineRes.blockReason)
+        val offlineInLease = repo.checkAndRefresh()
+        assertFalse(offlineInLease.isBlocked)
+        assertNull(offlineInLease.announcementToAutoShow)
+        assertTrue(repo.hasActiveLease())
+
+        // 模拟单调时钟租期过期
+        bridge.activeToken = 0L
+        val offlineExpired = repo.checkAndRefresh()
+        assertTrue(offlineExpired.isBlocked)
+        assertTrue(offlineExpired.isNetworkRequired)
+        assertFalse(repo.hasActiveLease())
     }
 
     @Test
-    fun `minVersionCode enforces upgrade block and announcement dismisses by id unless forceShow`() = runTest {
-        val repo = RemoteControlRepository(
-            prefs = mockPrefs,
-            httpClient = GeocodingHttpClient {
-                GeocodingHttpResponse(
-                    200,
-                    """
-                    {
-                      "appEnabled": true,
-                      "minVersionCode": 10,
-                      "disableReason": "请升级到最新版本",
-                      "announcement": {
-                        "enabled": true,
-                        "id": "ann_001",
-                        "title": "新版本公告",
-                        "message": "已上线多源搜索",
-                        "forceShow": false,
-                        "actionUrl": "https://example.com"
-                      }
-                    }
-                    """.trimIndent()
-                )
-            },
-            ioDispatcher = Dispatchers.Unconfined,
-            currentVersionCodeProvider = { 12 }
-        )
+    fun `invalid signature or nonce mismatch is strictly blocked`() = runTest {
+        val bridge = FakeSecurityBridge(signatureValid = false)
+        val client = RemoteJsonPostClient { _, _ ->
+            GeocodingHttpResponse(
+                200,
+                """
+                {
+                  "nonce": "fixed-nonce-001",
+                  "appEnabled": true,
+                  "effectiveEnabled": true,
+                  "minVersionCode": 1,
+                  "serverTime": 1700000000,
+                  "leaseSeconds": 1800,
+                  "signature": "tampered"
+                }
+                """.trimIndent()
+            )
+        }
+        val repo = buildRepo(client, bridge)
 
-        val first = repo.fetchAndEvaluate()
-        assertFalse(first.isBlocked)
-        assertNotNull(first.announcementToAutoShow)
-        assertEquals("ann_001", first.announcementToAutoShow!!.id)
+        val res = repo.checkAndRefresh()
+        assertTrue(res.isBlocked)
+        assertFalse(res.isNetworkRequired)
+        assertFalse(repo.hasActiveLease())
 
-        repo.markAnnouncementDismissed("ann_001")
-        val second = repo.fetchAndEvaluate()
-        assertNull(second.announcementToAutoShow)
-        assertNotNull(second.latestAnnouncement)
+        // Nonce 不匹配视为重放/伪造，同样不可授予租期
+        val validBridge = FakeSecurityBridge(signatureValid = true)
+        val mismatchClient = RemoteJsonPostClient { _, _ ->
+            GeocodingHttpResponse(
+                200,
+                """
+                {
+                  "nonce": "wrong-nonce",
+                  "appEnabled": true,
+                  "effectiveEnabled": true,
+                  "minVersionCode": 1,
+                  "serverTime": 1700000000,
+                  "leaseSeconds": 1800,
+                  "signature": "deadbeef"
+                }
+                """.trimIndent()
+            )
+        }
+        val repo2 = buildRepo(mismatchClient, validBridge)
+        val res2 = repo2.checkAndRefresh()
+        assertTrue(res2.isBlocked)
+        assertFalse(repo2.hasActiveLease())
+    }
 
-        // 低版本直接拦截
-        val oldVerRepo = RemoteControlRepository(
-            prefs = mockPrefs,
-            httpClient = GeocodingHttpClient { GeocodingHttpResponse(500, "err") },
-            ioDispatcher = Dispatchers.Unconfined,
-            currentVersionCodeProvider = { 9 }
-        )
-        assertTrue(oldVerRepo.getCachedState().isBlocked)
+    @Test
+    fun `remote kill switch revokes lease and stays blocked even when offline`() = runTest {
+        val bridge = FakeSecurityBridge()
+        var failNetwork = false
+        val client = RemoteJsonPostClient { _, _ ->
+            if (failNetwork) throw IOException("offline")
+            GeocodingHttpResponse(
+                200,
+                """
+                {
+                  "nonce": "fixed-nonce-001",
+                  "appEnabled": false,
+                  "deviceBlocked": false,
+                  "effectiveEnabled": false,
+                  "minVersionCode": 1,
+                  "serverTime": 1700000000,
+                  "leaseSeconds": 1800,
+                  "disableReason": "已紧急停用本版本",
+                  "announcement": {
+                    "enabled": true,
+                    "id": "n1",
+                    "title": "通知",
+                    "message": "停用说明",
+                    "actionUrl": "https://example.com/update"
+                  },
+                  "signature": "deadbeef"
+                }
+                """.trimIndent()
+            )
+        }
+        val repo = buildRepo(client, bridge)
+
+        val onlineRes = repo.checkAndRefresh()
+        assertTrue(onlineRes.isBlocked)
+        assertFalse(onlineRes.isNetworkRequired)
+        assertEquals("已紧急停用本版本", onlineRes.blockReason)
+        assertFalse(repo.hasActiveLease())
+
+        // 断网重开后应依然读取本地锁死缓存，防止断网绕过
+        failNetwork = true
+        val offlineRes = repo.checkAndRefresh()
+        assertTrue(offlineRes.isBlocked)
+        assertFalse(offlineRes.isNetworkRequired)
+        assertEquals("已紧急停用本版本", offlineRes.blockReason)
+        assertFalse(repo.hasActiveLease())
     }
 }

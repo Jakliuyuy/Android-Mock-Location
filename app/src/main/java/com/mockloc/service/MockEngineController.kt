@@ -7,6 +7,8 @@ import android.content.ServiceConnection
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import com.mockloc.data.config.MockConfig
+import com.mockloc.data.remote.RemoteControlConfig
+import com.mockloc.data.remote.RemoteControlRepository
 import com.mockloc.domain.engine.CruiseConfig
 import com.mockloc.domain.model.GeoPoint
 import com.mockloc.domain.model.MockRunStatus
@@ -28,6 +30,7 @@ class MockEngineController {
     private val permissionCheck: () -> PermissionCheckResult
     private val serviceStarter: ((Context) -> Unit)?
     private val serviceStopper: ((Context) -> Unit)?
+    private val leaseCheck: () -> Boolean
     private val controllerScope: CoroutineScope
 
     private val stateLock = Any()
@@ -57,24 +60,28 @@ class MockEngineController {
         serviceStopper: (Context) -> Unit = { ctx ->
             val intent = Intent(ctx, MockLocationForegroundService::class.java)
             ctx.stopService(intent)
-        }
+        },
+        leaseCheck: () -> Boolean = { RemoteControlRepository.getInstance(context).hasActiveLease() }
     ) {
         this.appContext = context.applicationContext ?: context
         this.permissionCheck = permissionCheck
         this.serviceStarter = serviceStarter
         this.serviceStopper = serviceStopper
+        this.leaseCheck = leaseCheck
         this.controllerScope = CoroutineScope(SupervisorJob() + dispatcher)
     }
 
     constructor(
         coordinator: MockEngineCoordinator,
         permissionCheck: () -> PermissionCheckResult,
-        dispatcher: CoroutineDispatcher = Dispatchers.Unconfined
+        dispatcher: CoroutineDispatcher = Dispatchers.Unconfined,
+        leaseCheck: () -> Boolean = { true }
     ) {
         this.appContext = null
         this.permissionCheck = permissionCheck
         this.serviceStarter = null
         this.serviceStopper = null
+        this.leaseCheck = leaseCheck
         this.controllerScope = CoroutineScope(SupervisorJob() + dispatcher)
         synchronized(stateLock) {
             boundCoordinator = coordinator
@@ -200,6 +207,12 @@ class MockEngineController {
     }
 
     fun startSingleMock(point: GeoPoint, config: MockConfig) {
+        if (!leaseCheck()) {
+            val reason = appContext?.let { RemoteControlRepository.getInstance(it).getDeniedReason() }
+                ?: RemoteControlConfig.DEFAULT_NETWORK_REQUIRED_REASON
+            emitError(reason)
+            return
+        }
         if (!GeoPoint.isValid(point.latitude, point.longitude)) {
             emitError("非法目标坐标: (${point.latitude}, ${point.longitude})")
             return
@@ -225,6 +238,12 @@ class MockEngineController {
     }
 
     fun startCruise(route: PlannedRoute, cruiseConfig: CruiseConfig, baseConfig: MockConfig) {
+        if (!leaseCheck()) {
+            val reason = appContext?.let { RemoteControlRepository.getInstance(it).getDeniedReason() }
+                ?: RemoteControlConfig.DEFAULT_NETWORK_REQUIRED_REASON
+            emitError(reason)
+            return
+        }
         if (route.waypoints.isEmpty()) {
             emitError("巡航路线为空，至少需要 1 个航点")
             return

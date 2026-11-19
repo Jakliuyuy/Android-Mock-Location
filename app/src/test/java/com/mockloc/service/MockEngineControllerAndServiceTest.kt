@@ -491,7 +491,8 @@ class MockEngineControllerAndServiceTest {
             dispatcher = dispatcher,
             serviceStopper = {
                 serviceStoppedCount++
-            }
+            },
+            leaseCheck = { true }
         )
 
         try {
@@ -782,7 +783,8 @@ class MockEngineControllerAndServiceTest {
             permissionCheck = { PermissionChecker.evaluateStartForegroundEligibility(true, true, true) },
             serviceStarter = {},
             dispatcher = dispatcher,
-            serviceStopper = {}
+            serviceStopper = {},
+            leaseCheck = { true }
         )
 
         // 1. 发起绑定但尚未回调 onServiceConnected
@@ -831,7 +833,8 @@ class MockEngineControllerAndServiceTest {
             permissionCheck = { PermissionChecker.evaluateStartForegroundEligibility(true, true, true) },
             serviceStarter = {},
             dispatcher = dispatcher,
-            serviceStopper = {}
+            serviceStopper = {},
+            leaseCheck = { true }
         )
 
         try {
@@ -894,7 +897,8 @@ class MockEngineControllerAndServiceTest {
             permissionCheck = { PermissionChecker.evaluateStartForegroundEligibility(true, true, true) },
             serviceStarter = { serviceStartedCount++ },
             dispatcher = dispatcher,
-            serviceStopper = {}
+            serviceStopper = {},
+            leaseCheck = { true }
         )
 
         try {
@@ -960,7 +964,8 @@ class MockEngineControllerAndServiceTest {
                 permissionCheck = { PermissionChecker.evaluateStartForegroundEligibility(true, true, true) },
                 serviceStarter = {},
                 dispatcher = Dispatchers.Default,
-                serviceStopper = {}
+                serviceStopper = {},
+                leaseCheck = { true }
             )
 
             try {

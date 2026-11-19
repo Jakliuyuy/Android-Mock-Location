@@ -938,18 +938,35 @@ class MainActivity : AppCompatActivity() {
         if (blockingDialog?.isShowing == true) return
         announcementDialog?.dismiss()
 
+        val titleRes = if (result.isNetworkRequired) {
+            R.string.remote_network_required_title
+        } else {
+            R.string.remote_blocked_title
+        }
+
         val builder = MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.remote_blocked_title)
+            .setTitle(titleRes)
             .setMessage(result.blockReason)
             .setCancelable(false)
-            .setPositiveButton(R.string.remote_exit_app) { _, _ ->
+
+        if (result.isNetworkRequired) {
+            builder.setPositiveButton(R.string.remote_retry_connect) { dialog, _ ->
+                dialog.dismiss()
+                blockingDialog = null
+                checkRemoteControl(manualOpenAnnouncement = false)
+            }
+            builder.setNegativeButton(R.string.remote_exit_app) { _, _ ->
                 finishAffinity()
             }
-
-        if (result.blockActionUrl.isNotBlank()) {
-            builder.setNeutralButton(R.string.announcement_open_link) { _, _ ->
-                openExternalUrl(result.blockActionUrl)
+        } else {
+            builder.setPositiveButton(R.string.remote_exit_app) { _, _ ->
                 finishAffinity()
+            }
+            if (result.blockActionUrl.isNotBlank()) {
+                builder.setNeutralButton(R.string.announcement_open_link) { _, _ ->
+                    openExternalUrl(result.blockActionUrl)
+                    finishAffinity()
+                }
             }
         }
 

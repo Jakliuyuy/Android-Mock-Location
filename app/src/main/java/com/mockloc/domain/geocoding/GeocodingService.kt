@@ -70,6 +70,42 @@ class HttpURLConnectionGeocodingClient(
         }
     }
 
+    @Throws(IOException::class)
+    fun postJson(url: String, jsonBody: String): GeocodingHttpResponse {
+        val connection = (URL(url).openConnection() as? HttpURLConnection)
+            ?: throw IOException("Unsupported URL connection for $url")
+
+        try {
+            connection.requestMethod = "POST"
+            connection.connectTimeout = connectTimeoutMs
+            connection.readTimeout = readTimeoutMs
+            connection.instanceFollowRedirects = false
+            connection.useCaches = false
+            connection.doOutput = true
+            connection.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty("User-Agent", "MockLocClient/2.1")
+
+            val payloadBytes = jsonBody.toByteArray(Charsets.UTF_8)
+            connection.setFixedLengthStreamingMode(payloadBytes.size)
+            connection.outputStream.use { out ->
+                out.write(payloadBytes)
+                out.flush()
+            }
+
+            val statusCode = connection.responseCode
+            val stream = if (statusCode in 200..299) {
+                connection.inputStream
+            } else {
+                connection.errorStream
+            }
+            val body = stream?.use { readBoundedUtf8(it, maxResponseBytes) } ?: ""
+            return GeocodingHttpResponse(statusCode = statusCode, body = body)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
     private fun readBoundedUtf8(stream: InputStream, maxBytes: Int): String {
         val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
         val out = ByteArrayOutputStream()
