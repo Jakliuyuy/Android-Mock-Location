@@ -607,5 +607,60 @@ class DomesticGeocodingServiceTest {
         assertEquals(1, omRes.size)
         assertEquals("六盘水市", omRes[0].name)
         assertEquals("open_meteo_online", omRes[0].source)
+
+        // 4) 百度 Web 搜索（中国大陆直连免 Key，BD-09MC -> WGS-84 精确转换）
+        val baiduRequester = FakeGeocodingHttpRequester().apply {
+            stubSuccess(Regex(".*ditu\\.amap\\.com.*"), "<html>blocked</html>")
+            stubSuccess(
+                Regex(".*map\\.baidu\\.com.*"),
+                """
+                {
+                  "content": [
+                    {
+                      "name": "万达广场(六盘水店)",
+                      "addr": "六盘水市钟山区碧云路与麒麟路交汇处",
+                      "x": 1167358396,
+                      "y": 305206857,
+                      "city_name": "六盘水市"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        }
+        val (baiduService, _) = newService(baiduRequester)
+        val baiduRes = baiduService.search("六盘水万达").getOrThrow()
+        assertEquals(1, baiduRes.size)
+        assertEquals("万达广场(六盘水店)", baiduRes[0].name)
+        assertEquals("baidu_web", baiduRes[0].source)
+        assertTrue(baiduRes[0].latitude in 26.5..26.7)
+        assertTrue(baiduRes[0].longitude in 104.7..104.95)
+
+        // 5) ArcGIS World Geocoding（免 Key 标准 WGS-84）
+        val arcgisRequester = FakeGeocodingHttpRequester().apply {
+            stubSuccess(Regex(".*ditu\\.amap\\.com.*"), "<html>blocked</html>")
+            stubHttpError(Regex(".*map\\.baidu\\.com.*"), 403, "forbidden")
+            stubSuccess(
+                Regex(".*geocode\\.arcgis\\.com.*"),
+                """
+                {
+                  "candidates": [
+                    {
+                      "address": "贵州省六盘水",
+                      "location": {"x": 104.8279652, "y": 26.5963778},
+                      "attributes": {"Match_addr": "贵州省六盘水", "Place_addr": "贵州省六盘水市", "City": "六盘水市", "Region": "贵州省"}
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        }
+        val (arcgisService, _) = newService(arcgisRequester)
+        val arcRes = arcgisService.search("六盘水").getOrThrow()
+        assertEquals(1, arcRes.size)
+        assertEquals("贵州省六盘水", arcRes[0].name)
+        assertEquals("arcgis_online", arcRes[0].source)
+        assertEquals(26.5963778, arcRes[0].latitude, 1e-6)
+        assertEquals(104.8279652, arcRes[0].longitude, 1e-6)
     }
 }

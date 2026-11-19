@@ -77,6 +77,8 @@ class DomesticGeocodingService(
     private suspend fun fetchOnlineSearchCascade(query: String): List<GeocodingResult> {
         val providers: List<Pair<String, (String) -> List<GeocodingResult>>> = listOf(
             buildSearchUrl(query) to { body -> AmapResponseParser.parseSearchResults(body) },
+            buildBaiduSearchUrl(query) to { body -> MultiProviderGeocodingParser.parseBaiduWebSearch(body) },
+            buildArcGisSearchUrl(query) to { body -> MultiProviderGeocodingParser.parseArcGisSearch(body) },
             buildPhotonSearchUrl(query) to { body -> MultiProviderGeocodingParser.parsePhotonSearch(body) },
             buildNominatimSearchUrl(query) to { body -> MultiProviderGeocodingParser.parseNominatimSearch(body) },
             buildOpenMeteoSearchUrl(query) to { body -> MultiProviderGeocodingParser.parseOpenMeteoSearch(body) }
@@ -147,6 +149,8 @@ class DomesticGeocodingService(
     companion object {
         private const val AMAP_WEB_SEARCH_BASE = "https://ditu.amap.com/service/poiTipslite"
         private const val AMAP_WEB_REGEO_BASE = "https://ditu.amap.com/service/regeo"
+        private const val BAIDU_WEB_SEARCH_BASE = "https://map.baidu.com/"
+        private const val ARCGIS_SEARCH_BASE = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/findAddressCandidates"
         private const val PHOTON_SEARCH_BASE = "https://photon.komoot.io/api/"
         private const val PHOTON_REGEO_BASE = "https://photon.komoot.io/reverse"
         private const val NOMINATIM_SEARCH_BASE = "https://nominatim.openstreetmap.org/search"
@@ -156,6 +160,16 @@ class DomesticGeocodingService(
         internal fun buildSearchUrl(query: String): String {
             val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
             return "$AMAP_WEB_SEARCH_BASE?words=$encoded&city=&geo=true"
+        }
+
+        internal fun buildBaiduSearchUrl(query: String): String {
+            val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
+            return "${BAIDU_WEB_SEARCH_BASE}?newmap=1&reqflag=pcmap&biz=1&from=webmap&qt=s&wd=$encoded&c=1&pn=0&rn=10&ie=utf-8"
+        }
+
+        internal fun buildArcGisSearchUrl(query: String): String {
+            val encoded = URLEncoder.encode(query, Charsets.UTF_8.name())
+            return "$ARCGIS_SEARCH_BASE?SingleLine=$encoded&f=json&maxLocations=10&outFields=Match_addr,Place_addr,City,Region"
         }
 
         internal fun buildPhotonSearchUrl(query: String): String {

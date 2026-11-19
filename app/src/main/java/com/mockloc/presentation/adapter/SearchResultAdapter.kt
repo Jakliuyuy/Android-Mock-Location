@@ -43,6 +43,7 @@ class SearchResultAdapter(
             )
             binding.tvResultSourceBadge.text = when (item.source) {
                 "amap_web", "amap_regeo",
+                "baidu_web", "arcgis_online",
                 "photon_online", "photon_regeo",
                 "nominatim_online", "nominatim_regeo",
                 "open_meteo_online" -> ctx.getString(R.string.badge_source_online)

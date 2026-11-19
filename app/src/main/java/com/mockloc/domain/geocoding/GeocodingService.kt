@@ -43,15 +43,18 @@ class HttpURLConnectionGeocodingClient(
             connection.instanceFollowRedirects = true
             connection.useCaches = false
             val isAmap = url.contains("amap.com", ignoreCase = true)
+            val isBaidu = url.contains("map.baidu.com", ignoreCase = true)
             connection.setRequestProperty(
                 "User-Agent",
-                if (isAmap) userAgent else OPEN_API_USER_AGENT
+                if (isAmap || isBaidu) userAgent else OPEN_API_USER_AGENT
             )
             connection.setRequestProperty("Accept", "application/json, text/plain, */*")
             connection.setRequestProperty("Accept-Charset", "UTF-8")
             connection.setRequestProperty("Accept-Language", "zh-CN,zh;q=0.9,en;q=0.5")
             if (isAmap) {
                 connection.setRequestProperty("Referer", referer)
+            } else if (isBaidu) {
+                connection.setRequestProperty("Referer", BAIDU_REFERER)
             }
 
             val statusCode = connection.responseCode
@@ -88,5 +91,6 @@ class HttpURLConnectionGeocodingClient(
             "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36"
         const val OPEN_API_USER_AGENT = "MockLocationApp/2.0 (Android; +https://github.com/Jakliuyuy/Android-Mock-Location)"
         const val DEFAULT_REFERER = "https://ditu.amap.com/"
+        const val BAIDU_REFERER = "https://map.baidu.com/"
     }
 }
